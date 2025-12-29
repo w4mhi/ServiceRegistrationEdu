@@ -1,0 +1,417 @@
+@page "/service/{ServiceId:guid}"
+@rendermode InteractiveServer
+@inject ServiceRegistryApiClient ApiClient
+@inject NavigationManager Navigation
+
+<PageTitle>Service Details</PageTitle>
+
+<div class="page-header-modern mb-4">
+    <div class="d-flex align-items-center gap-3">
+        <button class="btn-back-detail" @onclick="GoBack">
+            <i class="bi bi-arrow-left"></i>
+        </button>
+        <div>
+            <h1 class="page-title-modern mb-1">Service Details</h1>
+            @if (service != null)
+            {
+                <div class="detail-breadcrumb">
+                    <span class="breadcrumb-item">Dashboard</span>
+                    <i class="bi bi-chevron-right"></i>
+                    <span class="breadcrumb-item active">@service.ServiceName</span>
+                </div>
+            }
+        </div>
+    </div>
+    @if (service != null)
+    {
+        <button class="btn-refresh-top" @onclick="RefreshDetails">
+            <i class="bi bi-arrow-clockwise"></i>
+            <span>Refresh</span>
+        </button>
+    }
+</div>
+
+@if (service == null)
+{
+    <div class="loading-modern">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p>Loading service details...</p>
+    </div>
+}
+else
+{
+    <!-- Status Banner -->
+    <div class="detail-status-banner mb-4 @GetStatusBannerClass(service.HealthStatus)">
+        <div class="status-banner-content">
+            <div class="status-banner-icon">
+                @GetHealthIcon(service.HealthStatus)
+            </div>
+            <div class="status-banner-info">
+                <div class="status-banner-title">@service.ServiceName</div>
+                <div class="status-banner-status">
+                    <span class="heartbeat-indicator-modern @GetHeartbeatIndicatorClass(service)"></span>
+                    <span>@service.HealthStatus</span>
+                    @if (service.LastHeartbeatTimestamp.HasValue)
+                    {
+                        <span class="ms-2">• Last seen @GetRelativeTime(service.LastHeartbeatTimestamp.Value)</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Service Information Card -->
+            <div class="detail-card mb-4">
+                <div class="detail-card-header">
+                    <div class="detail-card-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <i class="bi bi-info-circle"></i>
+                    </div>
+                    <h4>Service Information</h4>
+                </div>
+                <div class="detail-card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <strong style="color: #64748b;">Service Name:</strong>
+                        </div>
+                        <div class="col-md-9">
+                            <span style="font-weight: 700; font-size: 1.1rem; color: #1e293b;">@service.ServiceName</span>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <strong style="color: #64748b;">Description:</strong>
+                        </div>
+                        <div class="col-md-9">
+                            <span style="color: #475569;">@service.Description</span>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <strong style="color: #64748b;">Contact Email:</strong>
+                        </div>
+                        <div class="col-md-9">
+                            <span style="color: #475569;">@service.ContactEmail</span>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <strong style="color: #64748b;">Service ID:</strong>
+                        </div>
+                        <div class="col-md-9">
+                            <code style="background: #f1f5f9; padding: 0.25rem 0.5rem; border-radius: 0.25rem; color: #475569;">@service.ServiceId</code>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <strong style="color: #64748b;">Created At:</strong>
+                        </div>
+                        <div class="col-md-9">
+                            <span style="color: #475569;">@service.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong style="color: #64748b;">Endpoints:</strong>
+                        </div>
+                        <div class="col-md-9">
+                            @foreach (string endpoint in GetEndpoints(service.Endpoints))
+                            {
+                                <div style="margin-bottom: 0.5rem;">
+                                    <code style="background: #f1f5f9; padding: 0.25rem 0.5rem; border-radius: 0.25rem; color: #475569;">@endpoint</code>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Heartbeat Configuration Card -->
+            <div class="detail-card mb-4">
+                <div class="detail-card-header">
+                    <div class="detail-card-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+                        <i class="bi bi-heart-pulse-fill"></i>
+                    </div>
+                    <h4>Heartbeat Monitoring</h4>
+                </div>
+                <div class="detail-card-body">
+                    <div class="heartbeat-stats-grid">
+                        <div class="heartbeat-stat-card">
+                            <div class="heartbeat-stat-icon" style="background: #dbeafe; color: #3b82f6;">
+                                <i class="bi bi-clock"></i>
+                            </div>
+                            <div class="heartbeat-stat-content">
+                                <div class="heartbeat-stat-label">Timeout</div>
+                                <div class="heartbeat-stat-value">@service.HeartbeatTimeout<span class="heartbeat-stat-unit">s</span></div>
+                            </div>
+                        </div>
+                        
+                        <div class="heartbeat-stat-card">
+                            <div class="heartbeat-stat-icon" style="background: #fef3c7; color: #f59e0b;">
+                                <i class="bi bi-exclamation-triangle"></i>
+                            </div>
+                            <div class="heartbeat-stat-content">
+                                <div class="heartbeat-stat-label">Max Missed</div>
+                                <div class="heartbeat-stat-value">@service.MaxMissedHeartbeats</div>
+                            </div>
+                        </div>
+                        
+                        <div class="heartbeat-stat-card">
+                            <div class="heartbeat-stat-icon" style="background: #d1fae5; color: #10b981;">
+                                <i class="bi bi-check-circle"></i>
+                            </div>
+                            <div class="heartbeat-stat-content">
+                                <div class="heartbeat-stat-label">Total Received</div>
+                                <div class="heartbeat-stat-value">@service.HeartbeatCount.ToString("N0")</div>
+                            </div>
+                        </div>
+                        
+                        <div class="heartbeat-stat-card">
+                            <div class="heartbeat-stat-icon" style="background: #fee2e2; color: #ef4444;">
+                                <i class="bi bi-x-circle"></i>
+                            </div>
+                            <div class="heartbeat-stat-content">
+                                <div class="heartbeat-stat-label">Missed</div>
+                                <div class="heartbeat-stat-value">@service.MissedHeartbeatCounter<span class="heartbeat-stat-unit">/@service.MaxMissedHeartbeats</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="heartbeat-progress-section">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="heartbeat-progress-label">Health Margin</span>
+                            <span class="heartbeat-progress-percentage">@((100 - GetMissedHeartbeatPercentage(service)).ToString("F0"))%</span>
+                        </div>
+                        <div class="heartbeat-progress-bar">
+                            <div class="heartbeat-progress-fill @GetProgressBarClass(service)" style="width: @((100 - GetMissedHeartbeatPercentage(service)))%"></div>
+                        </div>
+                        <div class="heartbeat-progress-help">Margin before service health degrades</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Health Status Card -->
+            <div class="detail-card mb-4">
+                <div class="detail-card-header">
+                    <div class="detail-card-icon" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                        <i class="bi bi-activity"></i>
+                    </div>
+                    <h4>Health Status</h4>
+                </div>
+                <div class="detail-card-body text-center">
+                    <div class="health-status-display">
+                        <div class="health-pulse-wrapper">
+                            <span class="heartbeat-indicator-modern @GetHeartbeatIndicatorClass(service)" style="width: 80px; height: 80px;"></span>
+                        </div>
+                        <div class="health-badge-wrapper">
+                            <span class="badge-modern @GetHealthBadgeClass(service.HealthStatus)">
+                                @GetHealthIcon(service.HealthStatus) @service.HealthStatus
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="health-timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-icon">
+                                <i class="bi bi-clock-history"></i>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-label">Last Heartbeat</div>
+                                @if (service.LastHeartbeatTimestamp.HasValue)
+                                {
+                                    <div class="timeline-value">@GetRelativeTime(service.LastHeartbeatTimestamp.Value)</div>
+                                    <div class="timeline-detail">@service.LastHeartbeatTimestamp.Value.ToLocalTime().ToString("MMM dd, HH:mm:ss")</div>
+                                }
+                                else
+                                {
+                                    <div class="timeline-value text-muted">Never</div>
+                                }
+                            </div>
+                        </div>
+                        
+                        <div class="timeline-item">
+                            <div class="timeline-icon">
+                                <i class="bi bi-calendar-check"></i>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-label">Registered</div>
+                                <div class="timeline-value">@GetRelativeTime(service.CreatedAt)</div>
+                                <div class="timeline-detail">@service.CreatedAt.ToLocalTime().ToString("MMM dd, yyyy")</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quick Stats Card -->
+            <div class="detail-card">
+                <div class="detail-card-header">
+                    <div class="detail-card-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">
+                        <i class="bi bi-graph-up"></i>
+                    </div>
+                    <h4>Quick Stats</h4>
+                </div>
+                <div class="detail-card-body">
+                    <div class="quick-stat-item">
+                        <div class="quick-stat-icon" style="background: #e0e7ff; color: #6366f1;">
+                            <i class="bi bi-heart-pulse"></i>
+                        </div>
+                        <div>
+                            <div class="quick-stat-label">Success Rate</div>
+                            <div class="quick-stat-value">@GetSuccessRate(service)%</div>
+                        </div>
+                    </div>
+                    
+                    <div class="quick-stat-item">
+                        <div class="quick-stat-icon" style="background: #fef3c7; color: #f59e0b;">
+                            <i class="bi bi-speedometer2"></i>
+                        </div>
+                        <div>
+                            <div class="quick-stat-label">Avg. Uptime</div>
+                            <div class="quick-stat-value">@GetUptimePercentage(service)%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid ServiceId { get; set; }
+
+    private Service? service;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadServiceDetails();
+    }
+
+    private async Task LoadServiceDetails()
+    {
+        service = await ApiClient.GetServiceByIdAsync(ServiceId);
+    }
+
+    private async Task RefreshDetails()
+    {
+        await LoadServiceDetails();
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    private List<string> GetEndpoints(string endpointsJson)
+    {
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<List<string>>(endpointsJson) ?? new List<string>();
+        }
+        catch
+        {
+            return new List<string>();
+        }
+    }
+
+    private double GetMissedHeartbeatPercentage(Service service)
+    {
+        if (service.MaxMissedHeartbeats == 0)
+            return 0;
+        return (double)service.MissedHeartbeatCounter / service.MaxMissedHeartbeats * 100;
+    }
+
+    private string GetHeartbeatIndicatorClass(Service service)
+    {
+        if (service.HealthStatus == HealthStatus.Healthy || service.HealthStatus == HealthStatus.Recovered)
+            return "heartbeat-active";
+        if (service.HealthStatus == HealthStatus.Unhealthy)
+            return "heartbeat-warning";
+        if (service.HealthStatus == HealthStatus.Degraded)
+            return "heartbeat-degraded";
+        if (service.HealthStatus == HealthStatus.Dead)
+            return "heartbeat-dead";
+        return "heartbeat-dead";
+    }
+
+    private string GetHealthBadgeClass(HealthStatus status)
+    {
+        return status switch
+        {
+            HealthStatus.Healthy => "badge-healthy-modern",
+            HealthStatus.Unhealthy => "badge-unhealthy-modern",
+            HealthStatus.Degraded => "badge-degraded-modern",
+            HealthStatus.Dead => "badge-dead-modern",
+            HealthStatus.Recovered => "badge-recovered-modern",
+            _ => "badge-unhealthy-modern"
+        };
+    }
+
+    private string GetHealthIcon(HealthStatus status)
+    {
+        return status switch
+        {
+            HealthStatus.Healthy => "✅",
+            HealthStatus.Unhealthy => "⚠️",
+            HealthStatus.Degraded => "📉",
+            HealthStatus.Dead => "❌",
+            HealthStatus.Recovered => "🔄",
+            _ => "⚠️"
+        };
+    }
+
+    private string GetRelativeTime(DateTime timestamp)
+    {
+        TimeSpan diff = DateTime.UtcNow - timestamp;
+        
+        if (diff.TotalMinutes < 1)
+            return $"{(int)diff.TotalSeconds}s ago";
+        if (diff.TotalHours < 1)
+            return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays < 1)
+            return $"{(int)diff.TotalHours}h ago";
+        
+        return $"{(int)diff.TotalDays}d ago";
+    }
+
+    private string GetStatusBannerClass(HealthStatus status)
+    {
+        return status switch
+        {
+            HealthStatus.Healthy => "status-healthy",
+            HealthStatus.Unhealthy => "status-unhealthy",
+            HealthStatus.Degraded => "status-degraded",
+            HealthStatus.Dead => "status-dead",
+            HealthStatus.Recovered => "status-recovered",
+            _ => "status-unhealthy"
+        };
+    }
+
+    private string GetProgressBarClass(Service service)
+    {
+        double percentage = GetMissedHeartbeatPercentage(service);
+        if (percentage == 0) return "progress-healthy";
+        if (percentage < 50) return "progress-warning";
+        return "progress-danger";
+    }
+
+    private string GetSuccessRate(Service service)
+    {
+        if (service.HeartbeatCount == 0) return "100";
+        double successRate = ((double)(service.HeartbeatCount - service.MissedHeartbeatCounter) / service.HeartbeatCount) * 100;
+        return successRate.ToString("F1");
+    }
+
+    private string GetUptimePercentage(Service service)
+    {
+        if (service.MaxMissedHeartbeats == 0) return "100";
+        double uptime = ((double)(service.MaxMissedHeartbeats - service.MissedHeartbeatCounter) / service.MaxMissedHeartbeats) * 100;
+        return Math.Max(0, uptime).ToString("F1");
+    }
+}

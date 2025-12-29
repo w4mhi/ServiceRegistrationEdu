@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: serviceregistry-config
+  namespace: serviceregistry
+data:
+  # Application settings
+  ASPNETCORE_ENVIRONMENT: "Production"
+  
+  # Heartbeat monitoring configuration
+  HeartbeatMonitoring__CheckIntervalSeconds: "5"
+  HeartbeatMonitoring__EnableMonitoring: "true"
+  
+  # Rate limiting configuration
+  RateLimiting__Heartbeat__PermitLimit: "200"
+  RateLimiting__Heartbeat__WindowSeconds: "1"
+  RateLimiting__Registration__PermitLimit: "10"
+  RateLimiting__Registration__WindowSeconds: "60"
+  
+  # Logging configuration
+  Logging__LogLevel__Default: "Information"
+  Logging__LogLevel__Microsoft.AspNetCore: "Warning"
+  Logging__LogLevel__Omni.ServiceRegistry: "Information"
+  
+  # API URLs
+  ApiBaseUrl: "http://serviceregistry-api:8080"
+  SignalR__HubUrl: "http://serviceregistry-api:8080/hubs/servicemonitor"

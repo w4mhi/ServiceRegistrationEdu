@@ -1,0 +1,363 @@
+@page "/"
+@rendermode InteractiveServer
+@inject ServiceRegistryApiClient ApiClient
+@inject SignalRHubClient HubClient
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<PageTitle>Service Registry - Monitoring Dashboard</PageTitle>
+
+<div class="page-header-modern mb-4">
+    <div>
+        <h1 class="page-title-modern mb-2">📊 Service Registry Dashboard</h1>
+        <p class="text-muted" style="font-size: 1.1rem;">Real-time monitoring of registered services</p>
+    </div>
+</div>
+
+<!-- Health Overview Cards -->
+<div class="stats-grid-modern">
+    @if (services == null)
+    {
+        <div style="grid-column: 1 / -1;">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3 text-muted fw-bold">Loading services...</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="stat-card" style="--card-color: #4f46e5; cursor: pointer;" @onclick='() => FilterByStatus("")'>
+            <div class="stat-icon">📊</div>
+            <div class="stat-value">@services.Count</div>
+            <div class="stat-label">Total Services</div>
+        </div>
+        <div class="stat-card" style="--card-color: #16a34a; cursor: pointer;" @onclick='() => FilterByStatus("Healthy")'>
+            <div class="stat-icon">✅</div>
+            <div class="stat-value">@services.Count(s => s.HealthStatus == HealthStatus.Healthy)</div>
+            <div class="stat-label">Healthy</div>
+        </div>
+        <div class="stat-card" style="--card-color: #ea580c; cursor: pointer;" @onclick='() => FilterByStatus("Unhealthy")'>
+            <div class="stat-icon">⚠️</div>
+            <div class="stat-value">@services.Count(s => s.HealthStatus == HealthStatus.Unhealthy)</div>
+            <div class="stat-label">Unhealthy</div>
+        </div>
+        <div class="stat-card" style="--card-color: #eab308; cursor: pointer;" @onclick='() => FilterByStatus("Degraded")'>
+            <div class="stat-icon">📉</div>
+            <div class="stat-value">@services.Count(s => s.HealthStatus == HealthStatus.Degraded)</div>
+            <div class="stat-label">Degraded</div>
+        </div>
+        <div class="stat-card" style="--card-color: #dc2626; cursor: pointer;" @onclick='() => FilterByStatus("Dead")'>
+            <div class="stat-icon">❌</div>
+            <div class="stat-value">@services.Count(s => s.HealthStatus == HealthStatus.Dead)</div>
+            <div class="stat-label">Dead</div>
+        </div>
+        <div class="stat-card" style="--card-color: #0891b2; cursor: pointer;" @onclick='() => FilterByStatus("Recovered")'>
+            <div class="stat-icon">🔄</div>
+            <div class="stat-value">@services.Count(s => s.HealthStatus == HealthStatus.Recovered)</div>
+            <div class="stat-label">Recovered</div>
+        </div>
+    }
+</div>
+
+<!-- Controls Section -->
+<div class="controls-section">
+    <div class="filter-section">
+        <label class="filter-label">Filter by Status</label>
+        <select class="filter-select" @bind="statusFilter" @bind:after="ApplyFilter">
+            <option value="">All Statuses</option>
+            <option value="Healthy">Healthy</option>
+            <option value="Unhealthy">Unhealthy</option>
+            <option value="Degraded">Degraded</option>
+            <option value="Dead">Dead</option>
+            <option value="Recovered">Recovered</option>
+        </select>
+    </div>
+    <div class="count-badge">
+        @(services != null ? filteredServices.Count : 0) of @(services?.Count ?? 0)
+    </div>
+    <button class="btn-refresh-top" @onclick="RefreshServices">
+        <i class="bi bi-arrow-clockwise"></i>
+        <span>Refresh</span>
+    </button>
+</div>
+
+<!-- Services Table -->
+<div class="services-card-modern">
+    <div class="services-header-modern">
+        <h4><i class="bi bi-activity"></i>Registered Services</h4>
+    </div>
+    <div class="p-0">
+        @if (services == null)
+        {
+            <div class="loading-modern">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Loading services...</p>
+            </div>
+        }
+        else if (services.Count == 0)
+        {
+            <div class="empty-state-modern">
+                <i class="bi bi-inbox"></i>
+                <p>No services registered yet</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover table-modern mb-0">
+                    <thead>
+                        <tr>
+                            <th class="ps-4">Service</th>
+                            <th>Heartbeat</th>
+                            <th>Health Status</th>
+                            <th>Missed Heartbeats</th>
+                            <th>Last Seen</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (Service service in filteredServices)
+                        {
+                            <tr class="service-row-modern">
+                                <td class="ps-4">
+                                    <div class="service-name-modern">@service.ServiceName</div>
+                                    <small style="color: #64748b;">@service.ContactEmail</small>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <span class="heartbeat-indicator-modern @GetHeartbeatIndicatorClass(service)"></span>
+                                        <div>
+                                            <div style="font-weight: 600; font-size: 0.95rem;">@GetHeartbeatStatus(service)</div>
+                                            <div style="font-size: 0.85rem; color: #64748b;">
+                                                <span style="color: #11998e;">✓ @service.HeartbeatCount</span> · 
+                                                <span style="color: #f5576c;">✗ @service.MissedHeartbeatCounter</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge-modern @GetHealthBadgeClassModern(service.HealthStatus)">
+                                        @GetHealthIcon(service.HealthStatus) @service.HealthStatus
+                                    </span>
+                                </td>
+                                <td>
+                                    <div>
+                                        <div style="font-weight: 700; font-size: 1.1rem;">
+                                            @service.MissedHeartbeatCounter <span style="font-weight: 400; color: #64748b;">/ @service.MaxMissedHeartbeats</span>
+                                        </div>
+                                        <div style="width: 100%; height: 6px; background: #f0f0f0; border-radius: 3px; margin-top: 0.25rem; overflow: hidden;">
+                                            <div style="width: @GetMissedHeartbeatPercentage(service)%; height: 100%; background: #667eea; transition: width 0.3s ease;"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (service.LastHeartbeatTimestamp.HasValue)
+                                    {
+                                        <div>
+                                            <div style="font-weight: 600; font-size: 0.95rem;">@GetRelativeTime(service.LastHeartbeatTimestamp.Value)</div>
+                                            <small style="color: #94a3b8;">@service.LastHeartbeatTimestamp.Value.ToLocalTime().ToString("HH:mm:ss")</small>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <em style="color: #cbd5e1; font-weight: 500;">Never</em>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn-details-modern" @onclick="() => ViewDetails(service.ServiceId)">
+                                        <i class="bi bi-info-circle me-1"></i>Details
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Service>? services;
+    private List<Service> filteredServices = new();
+    private string statusFilter = "";
+    private System.Threading.Timer? refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadServices();
+        
+        HubClient.OnHealthStatusChanged(async (serviceId, serviceName, previousStatus, newStatus) =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadServices();
+                StateHasChanged();
+            });
+        });
+        
+        HubClient.OnServiceAdded(async (serviceId, serviceName) =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadServices();
+                StateHasChanged();
+            });
+        });
+        
+        HubClient.OnServiceRemoved(async (serviceId, serviceName) =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadServices();
+                StateHasChanged();
+            });
+        });
+        
+        await HubClient.StartAsync();
+        
+        refreshTimer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadServices();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        refreshTimer?.Dispose();
+        await HubClient.StopAsync();
+    }
+
+    private async Task LoadServices()
+    {
+        services = await ApiClient.GetAllServicesAsync();
+        ApplyFilter();
+    }
+
+    private async Task RefreshServices()
+    {
+        await LoadServices();
+    }
+
+    private void ApplyFilter()
+    {
+        if (services == null)
+        {
+            filteredServices = new List<Service>();
+            return;
+        }
+
+        if (string.IsNullOrEmpty(statusFilter))
+        {
+            filteredServices = services;
+        }
+        else
+        {
+            HealthStatus filterStatus = Enum.Parse<HealthStatus>(statusFilter);
+            filteredServices = services.Where(s => s.HealthStatus == filterStatus).ToList();
+        }
+    }
+
+    private void FilterByStatus(string status)
+    {
+        statusFilter = status;
+        ApplyFilter();
+    }
+
+    private void ViewDetails(Guid serviceId)
+    {
+        Navigation.NavigateTo($"/service/{serviceId}");
+    }
+
+    private string GetRelativeTime(DateTime timestamp)
+    {
+        TimeSpan diff = DateTime.UtcNow - timestamp;
+        
+        if (diff.TotalMinutes < 1)
+            return $"{(int)diff.TotalSeconds}s ago";
+        if (diff.TotalHours < 1)
+            return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays < 1)
+            return $"{(int)diff.TotalHours}h ago";
+        
+        return $"{(int)diff.TotalDays}d ago";
+    }
+
+    private string GetHeartbeatIndicatorClass(Service service)
+    {
+        if (service.HealthStatus == HealthStatus.Healthy || service.HealthStatus == HealthStatus.Recovered)
+            return "heartbeat-active";
+        if (service.HealthStatus == HealthStatus.Unhealthy)
+            return "heartbeat-warning";
+        if (service.HealthStatus == HealthStatus.Degraded)
+            return "heartbeat-degraded";
+        if (service.HealthStatus == HealthStatus.Dead)
+            return "heartbeat-dead";
+        return "heartbeat-dead";
+    }
+
+    private string GetHeartbeatStatus(Service service)
+    {
+        if (!service.LastHeartbeatTimestamp.HasValue)
+            return "No heartbeat";
+        
+        TimeSpan timeSinceLastBeat = DateTime.UtcNow - service.LastHeartbeatTimestamp.Value;
+        double percentageOfTimeout = (timeSinceLastBeat.TotalSeconds / service.HeartbeatTimeout) * 100;
+        
+        if (percentageOfTimeout < 90)
+            return "Active";
+        return "Missing";
+    }
+
+    private string GetHealthBadgeClassModern(HealthStatus status)
+    {
+        return status switch
+        {
+            HealthStatus.Healthy => "healthy",
+            HealthStatus.Unhealthy => "unhealthy",
+            HealthStatus.Degraded => "degraded",
+            HealthStatus.Dead => "dead",
+            HealthStatus.Recovered => "recovered",
+            _ => "unhealthy"
+        };
+    }
+
+    private string GetHealthIcon(HealthStatus status)
+    {
+        return status switch
+        {
+            HealthStatus.Healthy => "✓",
+            HealthStatus.Unhealthy => "⚠",
+            HealthStatus.Degraded => "↓",
+            HealthStatus.Dead => "✗",
+            HealthStatus.Recovered => "↑",
+            _ => "?"
+        };
+    }
+
+    private double GetMissedHeartbeatPercentage(Service service)
+    {
+        if (service.MaxMissedHeartbeats == 0)
+            return 0;
+        return ((double)service.MissedHeartbeatCounter / service.MaxMissedHeartbeats) * 100;
+    }
+
+    private string GetProgressBarClassModern(Service service)
+    {
+        double percentage = GetMissedHeartbeatPercentage(service);
+        if (percentage < 30)
+            return "success";
+        if (percentage < 70)
+            return "warning";
+        return "danger";
+    }
+}

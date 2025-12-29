@@ -1,0 +1,55 @@
+# .dockerignore
+# Exclude unnecessary files from Docker build context
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Build outputs
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# NuGet
+**/.nuget/
+**/packages/
+*.nupkg
+
+# Test results
+**/TestResults/
+**/*.trx
+
+# IDEs
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation (exclude from runtime image)
+**/*.md
+!README.md
+
+# Deployment configs (not needed in image)
+deployment/kubernetes/
+deployment/docker/docker-compose.yml
+deployment/docker/.dockerignore
+
+# Specs and planning
+specs/
+.specify/
+.github/prompts/
+
+# Other
+*.log
+node_modules/

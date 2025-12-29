@@ -1,0 +1,224 @@
+openapi: 3.0.3
+info:
+  title: Heartbeat Monitoring API
+  description: API endpoint for services to send heartbeat signals for health monitoring
+  version: 1.0.0
+  contact:
+    name: Platform Team
+    email: platform@example.com
+
+servers:
+  - url: https://api.platform.example.com/api/v1
+    description: Production
+  - url: https://api-staging.platform.example.com/api/v1
+    description: Staging
+  - url: http://localhost:5000/api/v1
+    description: Local Development
+
+tags:
+  - name: Heartbeat
+    description: Service health monitoring operations
+
+paths:
+  /heartbeat/{serviceId}:
+    post:
+      tags:
+        - Heartbeat
+      summary: Send service heartbeat
+      description: |
+        Submit a heartbeat signal to indicate the service is operational.
+        
+        The monitoring system will:
+        - Acknowledge receipt with ACK response (<500ms target)
+        - Reset missed heartbeat counter if service is HEALTHY, UNHEALTHY, or DEGRADED
+        - Transition service to RECOVERED if currently DEAD
+        - Update last heartbeat timestamp
+        - Maintain health status based on heartbeat reception patterns
+        
+        Services should send heartbeats at intervals less than their configured timeout period.
+        Recommended: Send heartbeat at 50-75% of timeout interval (e.g., every 15-22 seconds for 30s timeout).
+      operationId: submitHeartbeat
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          description: Unique service identifier (assigned after registration approval)
+          schema:
+            type: string
+            format: uuid
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
+            examples:
+              runningStatus:
+                summary: Service running normally
+                value:
+                  clientStatus: running
+              startingStatus:
+                summary: Service starting up
+                value:
+                  clientStatus: starting
+      responses:
+        '200':
+          description: Heartbeat acknowledged successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeartbeatResponse'
+              example:
+                acknowledged: true
+                timestamp: '2025-11-09T14:55:30Z'
+                message: Heartbeat received
+        '403':
+          description: Service not approved or unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notApproved:
+                  summary: Service registration not yet approved
+                  value:
+                    error: Forbidden
+                    message: Service not authorized to send heartbeats
+                    details:
+                      serviceId: Service registration is still pending approval
+        '404':
+          description: Service not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: NotFound
+                message: Service not found
+                details:
+                  serviceId: No service found with the provided ID
+        '400':
+          description: Invalid request format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: ValidationError
+                message: Invalid heartbeat request
+                details:
+                  clientStatus: Client status is required
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many requests - rate limit exceeded
+          headers:
+            Retry-After:
+              description: Number of seconds to wait before retrying
+              schema:
+                type: integer
+              example: 5
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: RateLimitExceeded
+                message: Too many heartbeat requests
+                details:
+                  limit: Maximum 200 requests per second exceeded
+        '503':
+          description: Service temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - BearerAuth: []
+
+components:
+  schemas:
+    HeartbeatRequest:
+      type: object
+      required:
+        - clientStatus
+      properties:
+        clientStatus:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: |
+            Current operational status of the service from its perspective.
+            Common values: 'running', 'starting', 'stopping', 'degraded'
+          example: running
+
+    HeartbeatResponse:
+      type: object
+      required:
+        - acknowledged
+        - timestamp
+      properties:
+        acknowledged:
+          type: boolean
+          description: Indicates heartbeat was successfully received and processed
+          example: true
+        timestamp:
+          type: string
+          format: date-time
+          description: Server timestamp when heartbeat was processed
+          example: '2025-11-09T14:55:30Z'
+        message:
+          type: string
+          description: Optional acknowledgment message
+          example: Heartbeat received
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code or type
+          example: NotFound
+        message:
+          type: string
+          description: Human-readable error message
+          example: Service not found
+        details:
+          type: object
+          additionalProperties:
+            type: string
+          description: Additional error context
+          example:
+            serviceId: No service found with the provided ID
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token-based authentication.
+        Note: Authentication mechanism details deferred to P2.
+        Current implementation assumes existing authentication infrastructure.
+
+x-rate-limiting:
+  heartbeat:
+    policy: fixed-window
+    limit: 200
+    window: 1s
+    description: |
+      Maximum 200 heartbeat requests per second per service.
+      This accommodates high-frequency heartbeats while protecting the system.
+      
+      Recommended heartbeat intervals:
+      - 30s timeout → send every 15-22s
+      - 60s timeout → send every 30-45s
+      - 120s timeout → send every 60-90s

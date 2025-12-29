@@ -1,0 +1,149 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database (profile: postgres)
+  postgres:
+    image: postgres:16-alpine
+    container_name: serviceregistry-db-postgres
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: serviceregistry
+      POSTGRES_USER: serviceregistry
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U serviceregistry"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - serviceregistry-network
+
+  # Redis database (profile: redis)
+  redis:
+    image: redis/redis-stack-server:latest  # Includes RedisJSON + RediSearch
+    container_name: serviceregistry-db-redis
+    profiles: ["redis"]
+    command:
+      - redis-server
+      - "--save 900 1"      # RDB snapshot: save after 900s if ≥1 key changed
+      - "--save 300 10"     # RDB snapshot: save after 300s if ≥10 keys changed
+      - "--save 60 10000"   # RDB snapshot: save after 60s if ≥10000 keys changed
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - serviceregistry-network
+
+  # Service Registry API
+  api:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile.api
+    container_name: serviceregistry-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: "http://+:8080"
+      DatabaseProvider: ${DATABASE_PROVIDER:-Postgres}  # "Postgres", "Redis", "SqlServer", "InMemory"
+      ConnectionStrings__ServiceRegistry: ${CONNECTION_STRING:-Host=postgres;Port=5432;Database=serviceregistry;Username=serviceregistry;Password=changeme}
+      HeartbeatMonitoring__CheckIntervalSeconds: "5"
+      HeartbeatMonitoring__EnableMonitoring: "true"
+      RateLimiting__Heartbeat__PermitLimit: "200"
+      RateLimiting__Heartbeat__WindowSeconds: "1"
+      RateLimiting__Registration__PermitLimit: "10"
+      RateLimiting__Registration__WindowSeconds: "60"
+      Logging__LogLevel__Default: "Information"
+      Logging__LogLevel__Microsoft: "Warning"
+      Logging__LogLevel__Omni.ServiceRegistry: "Debug"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - serviceregistry-network
+    restart: unless-stopped
+
+  # Service Registry Dashboard
+  dashboard:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile.dashboard
+    container_name: serviceregistry-dashboard
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: "http://+:8080"
+      DatabaseProvider: ${DATABASE_PROVIDER:-Postgres}
+      ConnectionStrings__ServiceRegistry: ${CONNECTION_STRING:-Host=postgres;Port=5432;Database=serviceregistry;Username=serviceregistry;Password=changeme}
+      Logging__LogLevel__Default: "Information"
+      Logging__LogLevel__Microsoft: "Warning"
+      Logging__LogLevel__Omni.ServiceRegistry: "Debug"
+    ports:
+      - "5160:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - serviceregistry-network
+    restart: unless-stopped
+
+  # Database migration job (run once on startup - SQL databases only)
+  migration:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile
+      target: api-runtime
+    container_name: serviceregistry-migration
+    profiles: ["postgres", "sqlserver"]  # Only for SQL databases
+    environment:
+      ConnectionStrings__ServiceRegistry: ${CONNECTION_STRING:-Host=postgres;Port=5432;Database=serviceregistry;Username=serviceregistry;Password=changeme}
+    command: ["dotnet", "ef", "database", "update", "--no-build"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - serviceregistry-network
+    restart: "no"
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  serviceregistry-network:
+    driver: bridge
+
+# Usage Examples:
+# - PostgreSQL:  docker-compose --profile postgres up
+#                DATABASE_PROVIDER=Postgres CONNECTION_STRING="Host=postgres;Port=5432;..." docker-compose --profile postgres up
+# - Redis:       docker-compose --profile redis up
+#                DATABASE_PROVIDER=Redis CONNECTION_STRING="localhost:6379" docker-compose --profile redis up
+# - SQL Server:  docker-compose --profile sqlserver up (add sqlserver service definition if needed)

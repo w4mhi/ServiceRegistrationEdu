@@ -1,0 +1,586 @@
+openapi: 3.0.3
+info:
+  title: Administrator Management API
+  description: API endpoints for administrators to manage service registrations and deletions
+  version: 1.0.0
+  contact:
+    name: Platform Team
+    email: platform@example.com
+
+servers:
+  - url: https://api.platform.example.com/api/v1
+    description: Production
+  - url: https://api-staging.platform.example.com/api/v1
+    description: Staging
+  - url: http://localhost:5000/api/v1
+    description: Local Development
+
+tags:
+  - name: Admin
+    description: Administrator operations for registration and deletion management
+
+paths:
+  /admin/registrations/pending:
+    get:
+      tags:
+        - Admin
+      summary: List pending service registrations
+      description: |
+        Retrieve all service registrations awaiting administrator review.
+        Results are sorted by submission date (oldest first) to facilitate FIFO processing.
+      operationId: listPendingRegistrations
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination (1-based)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: pageSize
+          in: query
+          description: Number of records per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          example: 20
+      responses:
+        '200':
+          description: List of pending registrations retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingRegistrationsResponse'
+              example:
+                totalCount: 3
+                page: 1
+                pageSize: 20
+                registrations:
+                  - registrationId: 550e8400-e29b-41d4-a716-446655440000
+                    serviceName: payment-service
+                    description: Handles payment processing and transaction management
+                    owner: payments-team
+                    contactEmail: payments@example.com
+                    endpoints:
+                      - https://api.payments.example.com
+                    heartbeatTimeout: 30
+                    maxMissedHeartbeats: 10
+                    submittedDate: '2025-11-09T10:00:00Z'
+                  - registrationId: 660e8400-e29b-41d4-a716-446655440001
+                    serviceName: notification-service
+                    description: Sends email and SMS notifications
+                    owner: notifications-team
+                    contactEmail: notifications@example.com
+                    endpoints:
+                      - https://api.notifications.example.com
+                    heartbeatTimeout: 60
+                    maxMissedHeartbeats: 5
+                    submittedDate: '2025-11-09T11:30:00Z'
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - administrator privileges required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Forbidden
+                message: Insufficient permissions
+                details:
+                  role: Administrator role required to access this endpoint
+      security:
+        - BearerAuth: []
+
+  /admin/registrations/{registrationId}/approve:
+    post:
+      tags:
+        - Admin
+      summary: Approve a service registration
+      description: |
+        Approve a pending service registration, transitioning it to the active service catalog.
+        A unique service ID will be assigned and the service will be ready to receive heartbeats.
+      operationId: approveRegistration
+      parameters:
+        - name: registrationId
+          in: path
+          required: true
+          description: Registration identifier to approve
+          schema:
+            type: string
+            format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalRequest'
+            example:
+              comments: Service reviewed and approved for production use
+      responses:
+        '200':
+          description: Registration approved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalResponse'
+              example:
+                registrationId: 550e8400-e29b-41d4-a716-446655440000
+                serviceId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                status: approved
+                approvedBy: admin@example.com
+                approvedDate: '2025-11-09T16:45:00Z'
+                message: Registration approved. Service is now active in the catalog.
+        '404':
+          description: Registration not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: Invalid state transition (already approved/denied)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: InvalidOperation
+                message: Cannot approve registration
+                details:
+                  status: Registration has already been approved
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - administrator privileges required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - BearerAuth: []
+
+  /admin/registrations/{registrationId}/deny:
+    post:
+      tags:
+        - Admin
+      summary: Deny a service registration
+      description: |
+        Deny a pending service registration with required explanation comments.
+        The service owner can view the denial reason and resubmit if corrections are made.
+      operationId: denyRegistration
+      parameters:
+        - name: registrationId
+          in: path
+          required: true
+          description: Registration identifier to deny
+          schema:
+            type: string
+            format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DenialRequest'
+            example:
+              comments: Service name conflicts with existing service. Please use a unique name and resubmit.
+      responses:
+        '200':
+          description: Registration denied successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DenialResponse'
+              example:
+                registrationId: 550e8400-e29b-41d4-a716-446655440000
+                status: denied
+                deniedBy: admin@example.com
+                deniedDate: '2025-11-09T15:20:00Z'
+                comments: Service name conflicts with existing service. Please use a unique name and resubmit.
+                message: Registration denied.
+        '404':
+          description: Registration not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: Invalid request or state transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingComments:
+                  summary: Comments required for denial
+                  value:
+                    error: ValidationError
+                    message: Denial comments required
+                    details:
+                      comments: You must provide a reason for denying the registration
+                alreadyProcessed:
+                  summary: Already approved/denied
+                  value:
+                    error: InvalidOperation
+                    message: Cannot deny registration
+                    details:
+                      status: Registration has already been processed
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - administrator privileges required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - BearerAuth: []
+
+  /delete/{serviceId}:
+    post:
+      tags:
+        - Admin
+      summary: Request service deletion
+      description: |
+        Request deletion of a registered service. Deletion requires approval:
+        - Service owners can request deletion of their own services
+        - Administrators can request deletion of any service
+        - All deletion requests require administrator approval before completion
+        
+        Deletion is soft-delete: service is marked DELETED and removed from active catalog,
+        but historical records are retained. Re-registration requires a new service ID.
+      operationId: requestDeletion
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          description: Service identifier to delete
+          schema:
+            type: string
+            format: uuid
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeletionRequest'
+            example:
+              reason: Service decommissioned and replaced by new microservices architecture
+      responses:
+        '200':
+          description: Deletion request submitted successfully (auto-approved for admins)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionResponse'
+              examples:
+                pendingApproval:
+                  summary: Awaiting administrator approval
+                  value:
+                    serviceId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    deletionStatus: pending
+                    requestedBy: owner@example.com
+                    requestedDate: '2025-11-09T17:00:00Z'
+                    message: Deletion request submitted. Awaiting administrator approval.
+                approved:
+                  summary: Immediately approved (admin request)
+                  value:
+                    serviceId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    deletionStatus: deleted
+                    requestedBy: admin@example.com
+                    requestedDate: '2025-11-09T17:00:00Z'
+                    approvedBy: admin@example.com
+                    approvedDate: '2025-11-09T17:00:00Z'
+                    message: Service deleted successfully.
+        '404':
+          description: Service not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: Invalid operation (already deleted or pending deletion)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: InvalidOperation
+                message: Cannot request deletion
+                details:
+                  status: Service deletion is already pending or completed
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Forbidden
+                message: Insufficient permissions
+                details:
+                  serviceId: You can only request deletion of your own services
+      security:
+        - BearerAuth: []
+
+components:
+  schemas:
+    PendingRegistrationsResponse:
+      type: object
+      required:
+        - totalCount
+        - page
+        - pageSize
+        - registrations
+      properties:
+        totalCount:
+          type: integer
+          description: Total number of pending registrations
+          example: 3
+        page:
+          type: integer
+          description: Current page number
+          example: 1
+        pageSize:
+          type: integer
+          description: Number of records per page
+          example: 20
+        registrations:
+          type: array
+          items:
+            $ref: '#/components/schemas/PendingRegistration'
+
+    PendingRegistration:
+      type: object
+      required:
+        - registrationId
+        - serviceName
+        - description
+        - owner
+        - contactEmail
+        - endpoints
+        - heartbeatTimeout
+        - maxMissedHeartbeats
+        - submittedDate
+      properties:
+        registrationId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        serviceName:
+          type: string
+          example: payment-service
+        description:
+          type: string
+          example: Handles payment processing and transaction management
+        owner:
+          type: string
+          example: payments-team
+        contactEmail:
+          type: string
+          format: email
+          example: payments@example.com
+        endpoints:
+          type: array
+          items:
+            type: string
+            format: uri
+          example:
+            - https://api.payments.example.com
+        heartbeatTimeout:
+          type: integer
+          example: 30
+        maxMissedHeartbeats:
+          type: integer
+          example: 10
+        submittedDate:
+          type: string
+          format: date-time
+          example: '2025-11-09T10:00:00Z'
+
+    ApprovalRequest:
+      type: object
+      properties:
+        comments:
+          type: string
+          maxLength: 1000
+          description: Optional comments about the approval
+          example: Service reviewed and approved for production use
+
+    ApprovalResponse:
+      type: object
+      required:
+        - registrationId
+        - serviceId
+        - status
+        - approvedBy
+        - approvedDate
+      properties:
+        registrationId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        serviceId:
+          type: string
+          format: uuid
+          description: Newly assigned service ID
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        status:
+          type: string
+          enum: [approved]
+          example: approved
+        approvedBy:
+          type: string
+          example: admin@example.com
+        approvedDate:
+          type: string
+          format: date-time
+          example: '2025-11-09T16:45:00Z'
+        message:
+          type: string
+          example: Registration approved. Service is now active in the catalog.
+
+    DenialRequest:
+      type: object
+      required:
+        - comments
+      properties:
+        comments:
+          type: string
+          minLength: 10
+          maxLength: 1000
+          description: Required explanation for denial
+          example: Service name conflicts with existing service. Please use a unique name and resubmit.
+
+    DenialResponse:
+      type: object
+      required:
+        - registrationId
+        - status
+        - deniedBy
+        - deniedDate
+        - comments
+      properties:
+        registrationId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        status:
+          type: string
+          enum: [denied]
+          example: denied
+        deniedBy:
+          type: string
+          example: admin@example.com
+        deniedDate:
+          type: string
+          format: date-time
+          example: '2025-11-09T15:20:00Z'
+        comments:
+          type: string
+          example: Service name conflicts with existing service. Please use a unique name and resubmit.
+        message:
+          type: string
+          example: Registration denied.
+
+    DeletionRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          description: Optional reason for deletion request
+          example: Service decommissioned and replaced by new microservices architecture
+
+    DeletionResponse:
+      type: object
+      required:
+        - serviceId
+        - deletionStatus
+        - requestedBy
+        - requestedDate
+      properties:
+        serviceId:
+          type: string
+          format: uuid
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        deletionStatus:
+          type: string
+          enum: [pending, deleted]
+          description: pending=awaiting approval, deleted=completed
+          example: pending
+        requestedBy:
+          type: string
+          example: owner@example.com
+        requestedDate:
+          type: string
+          format: date-time
+          example: '2025-11-09T17:00:00Z'
+        approvedBy:
+          type: string
+          nullable: true
+          description: Administrator who approved (null if pending)
+          example: admin@example.com
+        approvedDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: When deletion was approved (null if pending)
+          example: '2025-11-09T17:00:00Z'
+        message:
+          type: string
+          example: Deletion request submitted. Awaiting administrator approval.
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code or type
+          example: NotFound
+        message:
+          type: string
+          description: Human-readable error message
+          example: Service not found
+        details:
+          type: object
+          additionalProperties:
+            type: string
+          description: Additional error context
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token-based authentication with administrator role required.
+        Note: Authentication mechanism details deferred to P2.
+        Current implementation assumes existing authentication infrastructure with role-based access control.

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-registry-config
+  namespace: service-registry
+data:
+  DatabaseProvider: "Postgres"
+  HeartbeatMonitoring__CheckIntervalSeconds: "5"
+  RateLimiting__HeartbeatPermitLimit: "200"
+  RateLimiting__HeartbeatQueueLimit: "50"
+  RateLimiting__RegistrationPermitLimit: "10"
+  RateLimiting__RegistrationWindow: "00:01:00"
+  Cors__AllowedOrigins__0: "http://localhost:5160"
+  Cors__AllowedOrigins__1: "https://dashboard.service-registry.local"
+  Logging__LogLevel__Default: "Information"
+  Logging__LogLevel__Microsoft.AspNetCore: "Warning"

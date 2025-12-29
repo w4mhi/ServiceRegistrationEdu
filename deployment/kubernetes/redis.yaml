@@ -1,0 +1,131 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: serviceregistry
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: serviceregistry
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+  selector:
+    app.kubernetes.io/name: redis
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: serviceregistry
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: serviceregistry
+spec:
+  serviceName: redis-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/component: database
+        app.kubernetes.io/part-of: serviceregistry
+    spec:
+      containers:
+      - name: redis
+        image: redis/redis-stack-server:latest  # Includes RedisJSON + RediSearch
+        ports:
+        - containerPort: 6379
+          name: redis
+        command:
+        - redis-server
+        - "--save 900 1"      # RDB snapshot: save after 900s if ≥1 key changed
+        - "--save 300 10"     # RDB snapshot: save after 300s if ≥10 keys changed
+        - "--save 60 10000"   # RDB snapshot: save after 60s if ≥10000 keys changed
+        - "--dir /data"       # Data directory
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+      labels:
+        app.kubernetes.io/name: redis
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+---
+# Optional: Redis Exporter for Prometheus monitoring
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: redis-exporter
+#   namespace: serviceregistry
+# spec:
+#   type: ClusterIP
+#   ports:
+#   - port: 9121
+#     targetPort: 9121
+#     name: metrics
+#   selector:
+#     app.kubernetes.io/name: redis-exporter
+# ---
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: redis-exporter
+#   namespace: serviceregistry
+# spec:
+#   replicas: 1
+#   selector:
+#     matchLabels:
+#       app.kubernetes.io/name: redis-exporter
+#   template:
+#     metadata:
+#       labels:
+#         app.kubernetes.io/name: redis-exporter
+#     spec:
+#       containers:
+#       - name: redis-exporter
+#         image: oliver006/redis_exporter:latest
+#         ports:
+#         - containerPort: 9121
+#         env:
+#         - name: REDIS_ADDR
+#           value: "redis-service:6379"

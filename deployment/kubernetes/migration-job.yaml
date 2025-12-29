@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: serviceregistry-migration
+  namespace: serviceregistry
+  annotations:
+    # Use this with Helm: "helm.sh/hook": pre-upgrade,pre-install
+    description: "EF Core database migration job"
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: serviceregistry-migration
+    spec:
+      restartPolicy: Never
+      initContainers:
+      # Wait for database to be ready
+      - name: wait-for-db
+        image: busybox:1.28
+        command: ['sh', '-c', 'until nc -z postgres-service 5432; do echo waiting for postgres; sleep 2; done']
+      containers:
+      - name: migration
+        image: your-registry/serviceregistry:latest  # Replace with actual image
+        command: ["dotnet", "ef", "database", "update", "--no-build"]
+        env:
+        - name: ConnectionStrings__ServiceRegistry
+          valueFrom:
+            secretKeyRef:
+              name: serviceregistry-secrets
+              key: database-connection-string
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+---
+# Alternative: Use init container in deployment for migration
+# This approach runs migration before each deployment starts
+# Uncomment if preferring this pattern over Job
+#
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: serviceregistry-api
+# spec:
+#   template:
+#     spec:
+#       initContainers:
+#       - name: migration
+#         image: your-registry/serviceregistry:latest
+#         command: ["dotnet", "ef", "database", "update", "--no-build"]
+#         env:
+#         - name: ConnectionStrings__ServiceRegistry
+#           valueFrom:
+#             secretKeyRef:
+#               name: serviceregistry-secrets
+#               key: database-connection-string

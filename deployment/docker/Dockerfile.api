@@ -1,0 +1,46 @@
+# Multi-stage Dockerfile for Service Registry API
+# Optimized for .NET 9.0
+
+# Stage 1: Build
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+# Copy solution and project files for dependency restore
+COPY ["Directory.Build.props", "./"]
+COPY ["Directory.Packages.props", "./"]
+COPY ["src/Omni.ServiceRegistry.Models/Omni.ServiceRegistry.Models.csproj", "src/Omni.ServiceRegistry.Models/"]
+COPY ["src/Omni.ServiceRegistry.Interfaces/Omni.ServiceRegistry.Interfaces.csproj", "src/Omni.ServiceRegistry.Interfaces/"]
+COPY ["src/Omni.ServiceRegistry.Services/Omni.ServiceRegistry.Services.csproj", "src/Omni.ServiceRegistry.Services/"]
+COPY ["src/Omni.ServiceRegistry.Data/Omni.ServiceRegistry.Data.csproj", "src/Omni.ServiceRegistry.Data/"]
+COPY ["src/Omni.ServiceRegistry.Api/Omni.ServiceRegistry.Api.csproj", "src/Omni.ServiceRegistry.Api/"]
+
+# Restore dependencies
+RUN dotnet restore "src/Omni.ServiceRegistry.Api/Omni.ServiceRegistry.Api.csproj"
+
+# Copy all source code
+COPY . .
+
+# Build and publish API
+WORKDIR "/src/src/Omni.ServiceRegistry.Api"
+RUN dotnet publish "Omni.ServiceRegistry.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+# Stage 2: Runtime
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+WORKDIR /app
+EXPOSE 8080
+
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security
+RUN groupadd -r appuser && useradd -r -g appuser appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Copy published application
+COPY --from=build /app/publish .
+
+# Health check endpoint
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:8080/health || exit 1
+
+ENTRYPOINT ["dotnet", "Omni.ServiceRegistry.Api.dll"]

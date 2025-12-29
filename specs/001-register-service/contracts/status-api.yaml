@@ -1,0 +1,249 @@
+openapi: 3.0.3
+info:
+  title: Service Status API
+  description: API endpoint for querying registered service status and details
+  version: 1.0.0
+  contact:
+    name: Platform Team
+    email: platform@example.com
+
+servers:
+  - url: https://api.platform.example.com/api/v1
+    description: Production
+  - url: https://api-staging.platform.example.com/api/v1
+    description: Staging
+  - url: http://localhost:5000/api/v1
+    description: Local Development
+
+tags:
+  - name: Status
+    description: Service status and catalog operations
+
+paths:
+  /status/service/{serviceId}:
+    get:
+      tags:
+        - Status
+      summary: Get service status and details
+      description: |
+        Retrieve the current status, health, and metadata for a registered service.
+        Only returns services that are approved and not marked as DELETED.
+      operationId: getServiceStatus
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          description: Unique service identifier (assigned after registration approval)
+          schema:
+            type: string
+            format: uuid
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+      responses:
+        '200':
+          description: Service details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceStatusResponse'
+              examples:
+                healthyService:
+                  summary: Healthy active service
+                  value:
+                    serviceId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    serviceName: payment-service
+                    description: Handles payment processing and transaction management
+                    owner: payments-team
+                    contactEmail: payments@example.com
+                    endpoints:
+                      - https://api.payments.example.com
+                      - https://api-backup.payments.example.com
+                    healthStatus: HEALTHY
+                    lastHeartbeatTimestamp: '2025-11-09T14:55:00Z'
+                    lastHeartbeatClientStatus: running
+                    missedHeartbeatCounter: 0
+                    heartbeatTimeout: 30
+                    maxMissedHeartbeats: 10
+                    registrationDate: '2025-11-09T10:00:00Z'
+                    lastUpdatedDate: '2025-11-09T14:55:00Z'
+                degradedService:
+                  summary: Degraded service (missing heartbeats)
+                  value:
+                    serviceId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    serviceName: payment-service
+                    description: Handles payment processing and transaction management
+                    owner: payments-team
+                    contactEmail: payments@example.com
+                    endpoints:
+                      - https://api.payments.example.com
+                    healthStatus: DEGRADED
+                    lastHeartbeatTimestamp: '2025-11-09T14:30:00Z'
+                    lastHeartbeatClientStatus: running
+                    missedHeartbeatCounter: 5
+                    heartbeatTimeout: 30
+                    maxMissedHeartbeats: 10
+                    registrationDate: '2025-11-09T10:00:00Z'
+                    lastUpdatedDate: '2025-11-09T14:50:00Z'
+                deadService:
+                  summary: Dead service (exceeded max missed heartbeats)
+                  value:
+                    serviceId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    serviceName: payment-service
+                    description: Handles payment processing and transaction management
+                    owner: payments-team
+                    contactEmail: payments@example.com
+                    endpoints:
+                      - https://api.payments.example.com
+                    healthStatus: DEAD
+                    lastHeartbeatTimestamp: '2025-11-09T12:00:00Z'
+                    lastHeartbeatClientStatus: running
+                    missedHeartbeatCounter: 11
+                    heartbeatTimeout: 30
+                    maxMissedHeartbeats: 10
+                    registrationDate: '2025-11-09T10:00:00Z'
+                    lastUpdatedDate: '2025-11-09T14:50:00Z'
+        '404':
+          description: Service not found or deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: NotFound
+                message: Service not found
+                details:
+                  serviceId: No active service found with the provided ID
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - BearerAuth: []
+
+components:
+  schemas:
+    ServiceStatusResponse:
+      type: object
+      required:
+        - serviceId
+        - serviceName
+        - description
+        - owner
+        - contactEmail
+        - endpoints
+        - healthStatus
+        - heartbeatTimeout
+        - maxMissedHeartbeats
+        - missedHeartbeatCounter
+        - registrationDate
+        - lastUpdatedDate
+      properties:
+        serviceId:
+          type: string
+          format: uuid
+          description: Unique service identifier
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        serviceName:
+          type: string
+          description: Service name
+          example: payment-service
+        description:
+          type: string
+          description: Service purpose and functionality
+          example: Handles payment processing and transaction management
+        owner:
+          type: string
+          description: Team or individual responsible
+          example: payments-team
+        contactEmail:
+          type: string
+          format: email
+          description: Service owner contact email
+          example: payments@example.com
+        endpoints:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: Service URLs
+          example:
+            - https://api.payments.example.com
+            - https://api-backup.payments.example.com
+        healthStatus:
+          type: string
+          enum: [HEALTHY, UNHEALTHY, DEGRADED, DEAD, RECOVERED]
+          description: |
+            Current health status based on heartbeat monitoring:
+            - HEALTHY: Receiving heartbeats within timeout period
+            - UNHEALTHY: Missed 1+ heartbeats but less than 50% of max
+            - DEGRADED: Missed 50%+ of max heartbeats
+            - DEAD: Exceeded max missed heartbeats
+            - RECOVERED: Previously DEAD, now receiving heartbeats again
+          example: HEALTHY
+        lastHeartbeatTimestamp:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of most recent heartbeat (null if never received)
+          example: '2025-11-09T14:55:00Z'
+        lastHeartbeatClientStatus:
+          type: string
+          nullable: true
+          description: Client-reported status from last heartbeat
+          example: running
+        missedHeartbeatCounter:
+          type: integer
+          minimum: 0
+          description: Current count of consecutive missed heartbeats
+          example: 0
+        heartbeatTimeout:
+          type: integer
+          description: Configured timeout in seconds between heartbeats
+          example: 30
+        maxMissedHeartbeats:
+          type: integer
+          description: Maximum consecutive missed heartbeats before marking DEAD
+          example: 10
+        registrationDate:
+          type: string
+          format: date-time
+          description: When service was first registered
+          example: '2025-11-09T10:00:00Z'
+        lastUpdatedDate:
+          type: string
+          format: date-time
+          description: When service record was last modified
+          example: '2025-11-09T14:55:00Z'
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code or type
+          example: NotFound
+        message:
+          type: string
+          description: Human-readable error message
+          example: Service not found
+        details:
+          type: object
+          additionalProperties:
+            type: string
+          description: Additional error context
+          example:
+            serviceId: No active service found with the provided ID
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token-based authentication.
+        Note: Authentication mechanism details deferred to P2.
+        Current implementation assumes existing authentication infrastructure.

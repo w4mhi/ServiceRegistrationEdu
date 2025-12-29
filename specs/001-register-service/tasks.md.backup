@@ -1,0 +1,560 @@
+# Implementation Tasks: Service Registration
+
+**Feature**: Service Registration with Heartbeat Monitoring  
+**Branch**: `001-register-service`  
+**Generated**: November 9, 2025  
+**Total Tasks**: 127 tasks across 8 phases
+
+## Overview
+
+This task breakdown organizes implementation by user story to enable independent development and testing. Each phase builds a complete, testable increment of functionality.
+
+### Implementation Strategy
+
+1. **MVP First**: Focus on Phase 3 (User Story 1) for minimal viable product
+2. **Incremental Delivery**: Each user story phase is independently deployable
+3. **Parallel Execution**: Tasks marked with [P] can be executed in parallel
+4. **Storage Flexibility**: Support PostgreSQL, Redis, or File storage via pluggable backend
+
+### User Story Mapping
+
+- **User Story 1** (Scenario 1): Service Registration API - Core registration flow
+- **User Story 2** (Scenario 2): Administrator Approval - Review and approve registrations
+- **User Story 3** (Scenario 3): Registration Status Query - Check pending status
+- **User Story 4** (Scenario 6-9): Heartbeat Monitoring - Health tracking and transitions
+- **User Story 5** (Scenario 5): Service Catalog & Search - Discovery functionality
+- **User Story 6** (Scenario 10): Service Deletion - Soft-delete with approval
+- **User Story 7** (Scenario 11-13): Dashboard UI - Blazor-based monitoring interface
+
+---
+
+## Phase 1: Project Setup & Infrastructure
+
+**Goal**: Initialize project structure, configure dependencies, and establish development environment.
+
+**Test Criteria**:
+- ✅ Solution builds successfully without errors
+- ✅ All dependencies resolve correctly
+- ✅ Project follows namespace convention (Omni.ServiceRegistry.*)
+- ✅ Docker builds successfully
+
+### Tasks
+
+- [ ] T001 Create solution file `ServiceRegistry.sln` in repository root
+- [ ] T002 [P] Create `Omni.ServiceRegistry.Models` class library project in `src/Omni.ServiceRegistry.Models/`
+- [ ] T003 [P] Create `Omni.ServiceRegistry.Interfaces` class library project in `src/Omni.ServiceRegistry.Interfaces/`
+- [ ] T004 [P] Create `Omni.ServiceRegistry.Services` class library project in `src/Omni.ServiceRegistry.Services/`
+- [ ] T005 [P] Create `Omni.ServiceRegistry.Data` class library project in `src/Omni.ServiceRegistry.Data/`
+- [ ] T006 [P] Create `Omni.ServiceRegistry.Data.Postgres` class library project in `src/Omni.ServiceRegistry.Data.Postgres/`
+- [ ] T007 [P] Create `Omni.ServiceRegistry.Data.Redis` class library project in `src/Omni.ServiceRegistry.Data.Redis/`
+- [ ] T008 [P] Create `Omni.ServiceRegistry.Data.File` class library project in `src/Omni.ServiceRegistry.Data.File/`
+- [ ] T009 [P] Create `Omni.ServiceRegistry.Api` web application project in `src/Omni.ServiceRegistry.Api/`
+- [ ] T010 [P] Create `Omni.ServiceRegistry.Dashboard` Blazor Server project in `src/Omni.ServiceRegistry.Dashboard/`
+- [ ] T011 Create `Directory.Build.props` in repository root with global MSBuild properties
+- [ ] T012 Create `Directory.Packages.props` in repository root with centralized package versions
+- [ ] T013 Add ASP.NET Core 8.0 package references to `Directory.Packages.props`
+- [ ] T014 Add Entity Framework Core 8.0 package references (Microsoft.EntityFrameworkCore, Npgsql.EntityFrameworkCore.PostgreSQL)
+- [ ] T015 Add StackExchange.Redis package reference for Redis storage provider
+- [ ] T016 Add Blazor and SignalR package references for dashboard
+- [ ] T017 Add xUnit, Moq, FluentAssertions, bUnit package references for testing
+- [ ] T018 Configure project references: Models ← Interfaces ← Services ← Data projects
+- [ ] T019 Configure project references: API and Dashboard depend on Services, Interfaces, Models
+- [ ] T020 Create `.editorconfig` in repository root with C# coding style rules (no var, PascalCase, etc.)
+- [ ] T021 Create `global.json` in repository root specifying .NET 8.0 SDK version
+- [ ] T022 Verify solution builds successfully: `dotnet build ServiceRegistry.sln`
+
+---
+
+## Phase 2: Foundational Components
+
+**Goal**: Implement core domain models, storage abstraction, and shared services required by all user stories.
+
+**Test Criteria**:
+- ✅ All domain models have proper validation attributes
+- ✅ Storage provider factory can instantiate all three providers (Postgres, Redis, File)
+- ✅ Service name normalization produces consistent SHA256 hashes
+- ✅ Configuration loads correctly from appsettings.json
+
+### Tasks
+
+#### Domain Models
+
+- [ ] T023 [P] Create `HealthStatus` enum in `src/Omni.ServiceRegistry.Models/HealthStatus.cs` with values: Healthy=0, Unhealthy=1, Degraded=2, Dead=3, Recovered=4, Deleted=5
+- [ ] T024 [P] Create `RegistrationStatus` enum in `src/Omni.ServiceRegistry.Models/RegistrationStatus.cs` with values: Pending=0, Approved=1, Denied=2
+- [ ] T025 [P] Create `DeletionStatus` enum in `src/Omni.ServiceRegistry.Models/DeletionStatus.cs` with values: Active=0, PendingDeletion=1, Deleted=2
+- [ ] T026 Create `RegistrationRequest` entity in `src/Omni.ServiceRegistry.Models/RegistrationRequest.cs` with all properties from data-model.md
+- [ ] T027 Create `Service` entity in `src/Omni.ServiceRegistry.Models/Service.cs` with all properties from data-model.md (include RowVersion for SQL concurrency)
+- [ ] T028 [P] Create `ServiceChangeHistory` entity in `src/Omni.ServiceRegistry.Models/ServiceChangeHistory.cs` with all properties from data-model.md
+
+#### Storage Abstraction
+
+- [ ] T029 Create `IStorageProvider` interface in `src/Omni.ServiceRegistry.Data/IStorageProvider.cs` with ReadAsync, WriteAsync, DeleteAsync, QueryAsync methods
+- [ ] T030 Create `IRegistrationRepository` interface in `src/Omni.ServiceRegistry.Interfaces/Repositories/IRegistrationRepository.cs` with domain operations (GetByIdAsync, AddAsync, UpdateAsync, ExistsByNormalizedNameAsync, GetPendingAsync)
+- [ ] T031 Create `IServiceRepository` interface in `src/Omni.ServiceRegistry.Interfaces/Repositories/IServiceRepository.cs` with domain operations (GetByIdAsync, GetByHealthStatusAsync, GetByOwnerAsync, AddAsync, UpdateAsync, ExistsByNormalizedNameAsync)
+- [ ] T032 Create `IChangeHistoryRepository` interface in `src/Omni.ServiceRegistry.Interfaces/Repositories/IChangeHistoryRepository.cs` with domain operations (AddAsync, GetByServiceIdAsync)
+- [ ] T033 Create `StorageProviderFactory` in `src/Omni.ServiceRegistry.Data/StorageProviderFactory.cs` that instantiates providers based on "DatabaseProvider" config value
+
+#### Shared Services
+
+- [ ] T034 Create `ServiceNameNormalizer` in `src/Omni.ServiceRegistry.Services/ServiceNameNormalizer.cs` implementing SHA256 hash of lowercase service name
+- [ ] T035 Create `ValidationService` in `src/Omni.ServiceRegistry.Services/ValidationService.cs` with methods to validate service name format, email format, URL format, positive integers (per R6)
+- [ ] T036 Create `IRegistrationService` interface in `src/Omni.ServiceRegistry.Interfaces/IRegistrationService.cs` with RegisterAsync, GetStatusAsync methods
+- [ ] T037 Create `IHeartbeatService` interface in `src/Omni.ServiceRegistry.Interfaces/IHeartbeatService.cs` with ProcessHeartbeatAsync, GetServiceHealthAsync methods
+- [ ] T038 Create `IAdministratorService` interface in `src/Omni.ServiceRegistry.Interfaces/IAdministratorService.cs` with GetPendingRegistrationsAsync, ApproveAsync, DenyAsync, DeleteServiceAsync methods
+- [ ] T039 Create `IServiceCatalogService` interface in `src/Omni.ServiceRegistry.Interfaces/IServiceCatalogService.cs` with SearchServicesAsync, GetServiceByIdAsync methods
+
+#### Configuration
+
+- [ ] T040 Create `appsettings.json` in `src/Omni.ServiceRegistry.Api/` with DatabaseProvider, ConnectionStrings, HeartbeatMonitoring, RateLimiting, Logging sections
+- [ ] T041 Create `appsettings.Development.json` in `src/Omni.ServiceRegistry.Api/` with development-specific overrides
+- [ ] T042 [P] Create `appsettings.json` in `src/Omni.ServiceRegistry.Dashboard/` with DatabaseProvider, ConnectionStrings, ApiBaseUrl, SignalR sections
+- [ ] T043 [P] Create `appsettings.Development.json` in `src/Omni.ServiceRegistry.Dashboard/` with development-specific overrides
+
+---
+
+## Phase 3: User Story 1 - Service Registration API
+
+**User Story**: As a service owner, I want to register my service via REST API so that it can be tracked in the platform.
+
+**Scenarios**: Scenario 1 (Register a New Service), Scenario 4 (Invalid Information)
+
+**Test Criteria**:
+- ✅ POST /api/v1/register accepts valid registration and returns registration ID with status 'pending'
+- ✅ POST /api/v1/register rejects invalid inputs with HTTP 400 and clear error messages
+- ✅ POST /api/v1/register is idempotent (returns existing registration ID for duplicate normalized names)
+- ✅ Service name normalization works correctly (case-insensitive uniqueness)
+- ✅ All validation rules from R6 are enforced
+
+### Tasks
+
+#### PostgreSQL Storage Implementation
+
+- [ ] T044 [P] [US1] Create `ServiceRegistryDbContext` in `src/Omni.ServiceRegistry.Data.Postgres/ServiceRegistryDbContext.cs` with DbSet for RegistrationRequest, Service, ServiceChangeHistory
+- [ ] T045 [P] [US1] Configure entity mappings in DbContext OnModelCreating: unique constraints, indexes, global query filters, RowVersion
+- [ ] T046 [P] [US1] Create initial EF Core migration `InitialSchema` in `src/Omni.ServiceRegistry.Data.Postgres/Migrations/`
+- [ ] T047 [US1] Create `PostgresStorageProvider` in `src/Omni.ServiceRegistry.Data.Postgres/PostgresStorageProvider.cs` implementing IStorageProvider using DbContext
+- [ ] T048 [US1] Create `PostgresRegistrationRepository` in `src/Omni.ServiceRegistry.Data.Postgres/Repositories/PostgresRegistrationRepository.cs` implementing IRegistrationRepository
+- [ ] T049 [US1] Implement AddAsync in PostgresRegistrationRepository with unique constraint handling and idempotency logic
+
+#### Redis Storage Implementation
+
+- [ ] T050 [P] [US1] Create `RedisStorageProvider` in `src/Omni.ServiceRegistry.Data.Redis/RedisStorageProvider.cs` implementing IStorageProvider using RedisJSON
+- [ ] T051 [P] [US1] Create `RedisRegistrationRepository` in `src/Omni.ServiceRegistry.Data.Redis/Repositories/RedisRegistrationRepository.cs` implementing IRegistrationRepository
+- [ ] T052 [P] [US1] Implement AddAsync in RedisRegistrationRepository with Lua script for atomic check-and-set idempotency
+
+#### File Storage Implementation
+
+- [ ] T053 [P] [US1] Create `FileStorageProvider` in `src/Omni.ServiceRegistry.Data.File/FileStorageProvider.cs` implementing IStorageProvider using JSON files
+- [ ] T054 [P] [US1] Create `FileRegistrationRepository` in `src/Omni.ServiceRegistry.Data.File/Repositories/FileRegistrationRepository.cs` implementing IRegistrationRepository
+- [ ] T055 [P] [US1] Implement AddAsync in FileRegistrationRepository with file locking for idempotency
+
+#### Business Logic
+
+- [ ] T056 [US1] Create `RegistrationService` in `src/Omni.ServiceRegistry.Services/RegistrationService.cs` implementing IRegistrationService
+- [ ] T057 [US1] Implement RegisterAsync method in RegistrationService: validate inputs, normalize service name, check idempotency, save to repository, return registration ID with status 'pending'
+- [ ] T058 [US1] Implement GetStatusAsync method in RegistrationService: retrieve registration by ID, return status (pending/approved/denied)
+
+#### API Layer
+
+- [ ] T059 [US1] Create `RegistrationRequestDto` in `src/Omni.ServiceRegistry.Api/DTOs/RegistrationRequestDto.cs` with data annotations for validation
+- [ ] T060 [US1] Create `RegistrationResponseDto` in `src/Omni.ServiceRegistry.Api/DTOs/RegistrationResponseDto.cs` with RegistrationId and Status properties
+- [ ] T061 [US1] Create `RegistrationController` in `src/Omni.ServiceRegistry.Api/Controllers/RegistrationController.cs` with POST /api/v1/register endpoint
+- [ ] T062 [US1] Implement POST /register endpoint: accept RegistrationRequestDto, call RegistrationService.RegisterAsync, return RegistrationResponseDto with HTTP 201
+- [ ] T063 [US1] Add exception handling middleware in `src/Omni.ServiceRegistry.Api/Middleware/ExceptionHandlingMiddleware.cs` to catch validation errors and return HTTP 400
+- [ ] T064 [US1] Configure dependency injection in `src/Omni.ServiceRegistry.Api/Program.cs`: register StorageProviderFactory, repositories, services, DbContext (for Postgres)
+- [ ] T065 [US1] Configure Swagger/OpenAPI in Program.cs for API documentation and testing
+
+#### Integration
+
+- [ ] T066 [US1] Run EF Core migration to create database schema: `dotnet ef database update` (Postgres only)
+- [ ] T067 [US1] Test POST /api/v1/register with valid payload using Postman/curl: verify HTTP 201, registration ID, status 'pending'
+- [ ] T068 [US1] Test POST /api/v1/register with invalid payload: verify HTTP 400 with validation error messages
+- [ ] T069 [US1] Test idempotency: submit same service name twice, verify second call returns same registration ID
+
+---
+
+## Phase 4: User Story 2 - Administrator Approval Workflow
+
+**User Story**: As a platform administrator, I want to review and approve/deny pending registrations so that only valid services are added to the catalog.
+
+**Scenarios**: Scenario 2 (Administrator Approves Service Registration)
+
+**Test Criteria**:
+- ✅ GET /api/v1/admin/registrations/pending returns list of pending registrations
+- ✅ POST /api/v1/admin/registrations/{id}/approve creates Service entity with approved status
+- ✅ POST /api/v1/admin/registrations/{id}/deny updates registration status to denied with comments
+- ✅ Approved service is queryable via service catalog APIs
+
+### Tasks
+
+#### Storage Layer
+
+- [ ] T070 [P] [US2] Implement GetPendingAsync in PostgresRegistrationRepository to query registrations with Status=Pending
+- [ ] T071 [P] [US2] Implement GetPendingAsync in RedisRegistrationRepository to filter registrations with Status=Pending
+- [ ] T072 [P] [US2] Implement GetPendingAsync in FileRegistrationRepository to filter registrations with Status=Pending
+- [ ] T073 [P] [US2] Create `PostgresServiceRepository` in `src/Omni.ServiceRegistry.Data.Postgres/Repositories/PostgresServiceRepository.cs` implementing IServiceRepository
+- [ ] T074 [P] [US2] Create `RedisServiceRepository` in `src/Omni.ServiceRegistry.Data.Redis/Repositories/RedisServiceRepository.cs` implementing IServiceRepository
+- [ ] T075 [P] [US2] Create `FileServiceRepository` in `src/Omni.ServiceRegistry.Data.File/Repositories/FileServiceRepository.cs` implementing IServiceRepository
+- [ ] T076 [US2] Implement AddAsync in all three ServiceRepository implementations to persist Service entities
+
+#### Business Logic
+
+- [ ] T077 [US2] Create `AdministratorService` in `src/Omni.ServiceRegistry.Services/AdministratorService.cs` implementing IAdministratorService
+- [ ] T078 [US2] Implement GetPendingRegistrationsAsync in AdministratorService: call repository, return pending registrations
+- [ ] T079 [US2] Implement ApproveAsync in AdministratorService: validate registration exists and is pending, create Service entity from registration, update registration status to Approved, log approval action
+- [ ] T080 [US2] Implement DenyAsync in AdministratorService: validate registration exists and is pending, validate comments are provided, update registration status to Denied with comments, log denial action
+
+#### API Layer
+
+- [ ] T081 [P] [US2] Create `PendingRegistrationDto` in `src/Omni.ServiceRegistry.Api/DTOs/PendingRegistrationDto.cs` with registration details for display
+- [ ] T082 [P] [US2] Create `ApprovalRequestDto` in `src/Omni.ServiceRegistry.Api/DTOs/ApprovalRequestDto.cs` with optional comments field
+- [ ] T083 [P] [US2] Create `DenialRequestDto` in `src/Omni.ServiceRegistry.Api/DTOs/DenialRequestDto.cs` with required comments field
+- [ ] T084 [US2] Create `AdminController` in `src/Omni.ServiceRegistry.Api/Controllers/AdminController.cs` with GET /api/v1/admin/registrations/pending endpoint
+- [ ] T085 [US2] Implement GET /pending endpoint: call AdministratorService.GetPendingRegistrationsAsync, return list of PendingRegistrationDto with HTTP 200
+- [ ] T086 [US2] Implement POST /api/v1/admin/registrations/{id}/approve endpoint: accept ApprovalRequestDto, call AdministratorService.ApproveAsync, return HTTP 200
+- [ ] T087 [US2] Implement POST /api/v1/admin/registrations/{id}/deny endpoint: accept DenialRequestDto, validate comments not empty, call AdministratorService.DenyAsync, return HTTP 200
+
+#### Integration
+
+- [ ] T088 [US2] Test GET /api/v1/admin/registrations/pending: verify returns list of pending registrations from Phase 3
+- [ ] T089 [US2] Test POST /approve: verify registration status changes to Approved, Service entity is created with same ServiceId
+- [ ] T090 [US2] Test POST /deny with comments: verify registration status changes to Denied, comments are persisted
+- [ ] T091 [US2] Test POST /deny without comments: verify HTTP 400 validation error
+
+---
+
+## Phase 5: User Story 3 - Registration Status Query
+
+**User Story**: As a service owner, I want to check the status of my registration request so that I know if it was approved or denied.
+
+**Scenarios**: Scenario 3 (Check Registration Status)
+
+**Test Criteria**:
+- ✅ GET /api/v1/status/registration/{id} returns 'pending' for pending registrations
+- ✅ GET /api/v1/status/registration/{id} returns 'approved' for approved registrations
+- ✅ GET /api/v1/status/registration/{id} returns 'denied' with comments for denied registrations
+- ✅ GET /api/v1/status/registration/{id} returns HTTP 404 for non-existent registration IDs
+
+### Tasks
+
+- [ ] T092 [P] [US3] Create `RegistrationStatusDto` in `src/Omni.ServiceRegistry.Api/DTOs/RegistrationStatusDto.cs` with Status, ServiceId (if approved), Comments (if denied) properties
+- [ ] T093 [US3] Implement GetByIdAsync in all three RegistrationRepository implementations to retrieve registration by ID
+- [ ] T094 [US3] Create `StatusController` in `src/Omni.ServiceRegistry.Api/Controllers/StatusController.cs` with GET /api/v1/status/registration/{id} endpoint
+- [ ] T095 [US3] Implement GET /status/registration/{id} endpoint: call RegistrationService.GetStatusAsync, return RegistrationStatusDto with HTTP 200 or HTTP 404 if not found
+- [ ] T096 [US3] Test GET /status/registration/{id} for pending registration: verify returns status 'pending'
+- [ ] T097 [US3] Test GET /status/registration/{id} for approved registration: verify returns status 'approved' with serviceId
+- [ ] T098 [US3] Test GET /status/registration/{id} for denied registration: verify returns status 'denied' with comments
+- [ ] T099 [US3] Test GET /status/registration/{id} with non-existent ID: verify returns HTTP 404
+
+---
+
+## Phase 6: User Story 4 - Heartbeat Monitoring & Health Tracking
+
+**User Story**: As a service owner, I want my service to send heartbeats so that the platform can track its health status automatically.
+
+**Scenarios**: Scenario 6 (Healthy Status), Scenario 7 (Health Degrades), Scenario 8 (Degraded Recovers), Scenario 9 (Dead Recovers)
+
+**Test Criteria**:
+- ✅ POST /api/v1/heartbeat/{serviceId} responds with ACK within 500ms
+- ✅ Background service detects missed heartbeats and transitions status: HEALTHY → UNHEALTHY → DEGRADED → DEAD
+- ✅ Service status transitions to RECOVERED when heartbeats resume after DEAD
+- ✅ Service status transitions to HEALTHY after consecutive successful heartbeats in RECOVERED state
+- ✅ Heartbeat writes optimized (write only on status change or periodic snapshot)
+- ✅ Background service polls every 5 seconds to check for timeout
+
+### Tasks
+
+#### Business Logic
+
+- [ ] T100 [US4] Create `HeartbeatService` in `src/Omni.ServiceRegistry.Services/HeartbeatService.cs` implementing IHeartbeatService with ConcurrentDictionary for in-memory state
+- [ ] T101 [US4] Implement ProcessHeartbeatAsync in HeartbeatService: update in-memory heartbeat state, calculate health status, conditionally write to database (status change or periodic snapshot per MaxMissedHeartbeats)
+- [ ] T102 [US4] Implement health status calculation logic: determine new status based on MissedHeartbeatCounter and MaxMissedHeartbeats thresholds (0=HEALTHY, >0 and <50%=UNHEALTHY, ≥50%=DEGRADED, >max=DEAD)
+- [ ] T103 [US4] Create `HeartbeatMonitorService` BackgroundService in `src/Omni.ServiceRegistry.Services/HeartbeatMonitorService.cs` that polls every 5 seconds
+- [ ] T104 [US4] Implement ExecuteAsync in HeartbeatMonitorService: query all services, check if LastHeartbeatTimestamp + HeartbeatTimeout < now, increment MissedHeartbeatCounter, update health status, log warnings/errors
+- [ ] T105 [US4] Implement GetServiceHealthAsync in HeartbeatService: retrieve Service from repository, return current health status and last heartbeat timestamp
+
+#### API Layer
+
+- [ ] T106 [P] [US4] Create `HeartbeatRequestDto` in `src/Omni.ServiceRegistry.Api/DTOs/HeartbeatRequestDto.cs` with ClientStatus property
+- [ ] T107 [P] [US4] Create `HeartbeatResponseDto` in `src/Omni.ServiceRegistry.Api/DTOs/HeartbeatResponseDto.cs` with Acknowledged property
+- [ ] T108 [P] [US4] Create `ServiceStatusDto` in `src/Omni.ServiceRegistry.Api/DTOs/ServiceStatusDto.cs` with ServiceId, ServiceName, HealthStatus, LastHeartbeatTimestamp properties
+- [ ] T109 [US4] Create `HeartbeatController` in `src/Omni.ServiceRegistry.Api/Controllers/HeartbeatController.cs` with POST /api/v1/heartbeat/{serviceId} endpoint
+- [ ] T110 [US4] Implement POST /heartbeat/{serviceId} endpoint: accept HeartbeatRequestDto, call HeartbeatService.ProcessHeartbeatAsync, return HeartbeatResponseDto with HTTP 200 (must respond <500ms)
+- [ ] T111 [US4] Add rate limiting to heartbeat endpoint in Program.cs: fixed window policy, 200 requests/second, queue size 50
+- [ ] T112 [US4] Implement GET /api/v1/status/service/{id} endpoint in StatusController: call HeartbeatService.GetServiceHealthAsync, return ServiceStatusDto with HTTP 200 or HTTP 404
+- [ ] T113 [US4] Register HeartbeatMonitorService as hosted service in Program.cs
+
+#### Storage Layer Extensions
+
+- [ ] T114 [P] [US4] Implement UpdateAsync in PostgresServiceRepository with optimistic concurrency handling (catch DbUpdateConcurrencyException, reload, retry)
+- [ ] T115 [P] [US4] Implement UpdateAsync in RedisServiceRepository (last write wins)
+- [ ] T116 [P] [US4] Implement UpdateAsync in FileServiceRepository with file locking
+
+#### Integration
+
+- [ ] T117 [US4] Approve a service registration from Phase 4 to create a Service entity for testing
+- [ ] T118 [US4] Test POST /api/v1/heartbeat/{serviceId} with valid serviceId: verify returns ACK within 500ms
+- [ ] T119 [US4] Test POST /api/v1/heartbeat/{serviceId} multiple times: verify service remains HEALTHY
+- [ ] T120 [US4] Stop sending heartbeats and wait for timeout: verify status transitions to UNHEALTHY, then DEGRADED, then DEAD (via GET /status/service/{id})
+- [ ] T121 [US4] Resume heartbeats after DEAD: verify status transitions to RECOVERED, then HEALTHY after consecutive successes
+- [ ] T122 [US4] Verify heartbeat writes are optimized: check database for reduced write count (status changes + periodic snapshots only)
+
+---
+
+## Phase 7: User Story 5 - Service Catalog & Search
+
+**User Story**: As a service consumer, I want to browse and search for registered services so that I can discover services in the platform.
+
+**Scenarios**: Scenario 5 (View Registered Services)
+
+**Test Criteria**:
+- ✅ GET /api/v1/services returns all non-deleted services
+- ✅ GET /api/v1/services?name={name} filters by service name
+- ✅ GET /api/v1/services?owner={owner} filters by owner
+- ✅ GET /api/v1/services?healthStatus={status} filters by health status
+- ✅ Search results exclude DELETED services (soft delete filter)
+
+### Tasks
+
+- [ ] T123 [P] [US5] Create `ServiceCatalogService` in `src/Omni.ServiceRegistry.Services/ServiceCatalogService.cs` implementing IServiceCatalogService
+- [ ] T124 [US5] Implement SearchServicesAsync in ServiceCatalogService: call repository with filters (name, owner, healthStatus), apply soft-delete filter, return matching services
+- [ ] T125 [US5] Implement GetServiceByIdAsync in ServiceCatalogService: retrieve service by ID, exclude if DELETED, return service details
+- [ ] T126 [P] [US5] Implement GetByHealthStatusAsync in all three ServiceRepository implementations to query by health status with soft-delete filtering
+- [ ] T127 [P] [US5] Implement GetByOwnerAsync in all three ServiceRepository implementations to query by owner with soft-delete filtering
+- [ ] T128 [P] [US5] Create `ServiceListDto` in `src/Omni.ServiceRegistry.Api/DTOs/ServiceListDto.cs` with paginated list properties
+- [ ] T129 [P] [US5] Create `ServiceDetailDto` in `src/Omni.ServiceRegistry.Api/DTOs/ServiceDetailDto.cs` with all service metadata
+- [ ] T130 [US5] Create `CatalogController` in `src/Omni.ServiceRegistry.Api/Controllers/CatalogController.cs` with GET /api/v1/services endpoint
+- [ ] T131 [US5] Implement GET /services endpoint: accept query parameters (name, owner, healthStatus), call ServiceCatalogService.SearchServicesAsync, return ServiceListDto with HTTP 200
+- [ ] T132 [US5] Implement GET /api/v1/services/{id} endpoint: call ServiceCatalogService.GetServiceByIdAsync, return ServiceDetailDto with HTTP 200 or HTTP 404
+- [ ] T133 [US5] Test GET /api/v1/services: verify returns all non-deleted services
+- [ ] T134 [US5] Test GET /api/v1/services?name={name}: verify filters correctly
+- [ ] T135 [US5] Test GET /api/v1/services?healthStatus=HEALTHY: verify returns only healthy services
+- [ ] T136 [US5] Test soft-delete filtering: mark a service as DELETED, verify it does not appear in search results
+
+---
+
+## Phase 8: User Story 6 - Service Deletion Workflow
+
+**User Story**: As a service owner or administrator, I want to request service deletion so that obsolete services are removed from the catalog.
+
+**Scenarios**: Scenario 10 (Service Deletion)
+
+**Test Criteria**:
+- ✅ POST /api/v1/delete/{id} marks service with DeletionStatus=PendingDeletion
+- ✅ Administrator can approve deletion via POST /api/v1/admin/delete/{id}/approve
+- ✅ Approved deletion marks service with DeletionStatus=Deleted
+- ✅ Deleted services are excluded from catalog queries (soft-delete filter)
+- ✅ Deleted service can be re-registered with new service ID
+
+### Tasks
+
+- [ ] T137 [US6] Extend AdministratorService with DeleteServiceAsync method: validate service exists, mark DeletionStatus=PendingDeletion, log deletion request
+- [ ] T138 [US6] Extend AdministratorService with ApproveDeletionAsync method: validate service exists and is PendingDeletion, mark DeletionStatus=Deleted, log approval
+- [ ] T139 [P] [US6] Create `DeletionRequestDto` in `src/Omni.ServiceRegistry.Api/DTOs/DeletionRequestDto.cs` with Reason property
+- [ ] T140 [US6] Implement POST /api/v1/delete/{id} endpoint in AdminController: accept DeletionRequestDto, call AdministratorService.DeleteServiceAsync, return HTTP 200
+- [ ] T141 [US6] Implement POST /api/v1/admin/delete/{id}/approve endpoint in AdminController: call AdministratorService.ApproveDeletionAsync, return HTTP 200
+- [ ] T142 [US6] Test POST /api/v1/delete/{id}: verify DeletionStatus changes to PendingDeletion
+- [ ] T143 [US6] Test POST /api/v1/admin/delete/{id}/approve: verify DeletionStatus changes to Deleted
+- [ ] T144 [US6] Test catalog query excludes deleted service: verify GET /api/v1/services does not return deleted service
+- [ ] T145 [US6] Test re-registration after deletion: submit new registration with same service name, verify new registration ID is assigned
+
+---
+
+## Phase 9: User Story 7 - Blazor Dashboard UI
+
+**User Story**: As an administrator or service owner, I want a web dashboard to monitor services and process approvals visually.
+
+**Scenarios**: Scenario 11 (Admin Reviews Services), Scenario 12 (Admin Processes Approvals), Scenario 13 (Service Owner Views Services)
+
+**Test Criteria**:
+- ✅ Dashboard Index page displays service count by health status
+- ✅ Dashboard Index page shows filterable service table
+- ✅ Dashboard PendingApprovals page lists pending registrations and deletions
+- ✅ Dashboard ServiceDetail page shows full service metadata and heartbeat history
+- ✅ Dashboard updates in near-real-time (<10s) when health status changes via SignalR
+- ✅ Dashboard loads within 2 seconds
+
+### Tasks
+
+#### SignalR Hub
+
+- [ ] T146 [P] [US7] Create `ServiceMonitorHub` SignalR hub in `src/Omni.ServiceRegistry.Api/Hubs/ServiceMonitorHub.cs` with HealthStatusChanged method
+- [ ] T147 [US7] Register SignalR services and map hub endpoint /hubs/servicemonitor in Program.cs
+- [ ] T148 [US7] Extend HeartbeatService to send SignalR notification when health status changes: inject IHubContext, call Clients.All.SendAsync("HealthStatusChanged", serviceId, newStatus)
+
+#### Dashboard Pages
+
+- [ ] T149 [P] [US7] Create `Index.razor` in `src/Omni.ServiceRegistry.Dashboard/Pages/` as main monitoring dashboard
+- [ ] T150 [US7] Implement Index.razor: display service count cards (grouped by health status), filterable service table, auto-refresh via SignalR subscription
+- [ ] T151 [P] [US7] Create `PendingApprovals.razor` in `src/Omni.ServiceRegistry.Dashboard/Pages/` for administrator approval workflow
+- [ ] T152 [US7] Implement PendingApprovals.razor: display pending registrations table, pending deletions table, approve/deny modal dialogs with comment fields
+- [ ] T153 [P] [US7] Create `ServiceDetail.razor` in `src/Omni.ServiceRegistry.Dashboard/Pages/` for detailed service view
+- [ ] T154 [US7] Implement ServiceDetail.razor: display all service metadata, current health status with visual indicators (green/yellow/red), heartbeat history table, change history table
+
+#### Dashboard Components
+
+- [ ] T155 [P] [US7] Create `ServiceStatusCard.razor` in `src/Omni.ServiceRegistry.Dashboard/Components/` as reusable service display card with health indicator
+- [ ] T156 [P] [US7] Create `HealthIndicator.razor` in `src/Omni.ServiceRegistry.Dashboard/Components/` as color-coded health status badge (green=Healthy, yellow=Unhealthy, orange=Degraded, red=Dead)
+- [ ] T157 [P] [US7] Create `ApprovalModal.razor` in `src/Omni.ServiceRegistry.Dashboard/Components/` as approval/denial dialog with comment field
+- [ ] T158 [P] [US7] Create `ServiceTable.razor` in `src/Omni.ServiceRegistry.Dashboard/Components/` as filterable service list table
+
+#### Dashboard Services
+
+- [ ] T159 [US7] Create `DashboardDataService` in `src/Omni.ServiceRegistry.Dashboard/Services/` that wraps ServiceCatalogService and AdministratorService
+- [ ] T160 [US7] Implement methods in DashboardDataService: GetServicesGroupedByStatusAsync, GetPendingRegistrationsAsync, GetServiceDetailAsync, ApproveRegistrationAsync, DenyRegistrationAsync
+- [ ] T161 [US7] Configure dependency injection in `src/Omni.ServiceRegistry.Dashboard/Program.cs`: register repositories, services, SignalR client
+- [ ] T162 [US7] Configure SignalR client in Dashboard to connect to API hub endpoint at /hubs/servicemonitor
+
+#### Integration
+
+- [ ] T163 [US7] Test Dashboard Index page loads within 2 seconds and displays service count cards
+- [ ] T164 [US7] Test Dashboard Index page table filters work correctly (by name, owner, status)
+- [ ] T165 [US7] Test Dashboard PendingApprovals page displays pending registrations from API
+- [ ] T166 [US7] Test approve action in Dashboard: click approve button, verify modal opens, submit approval, verify registration status changes
+- [ ] T167 [US7] Test deny action in Dashboard: click deny button, verify modal requires comments, submit denial, verify registration status changes
+- [ ] T168 [US7] Test Dashboard ServiceDetail page displays all service metadata and heartbeat history
+- [ ] T169 [US7] Test SignalR real-time updates: trigger health status change in API, verify Dashboard updates within 10 seconds without page refresh
+
+---
+
+## Phase 10: Deployment & Observability
+### Phase 10: Deployment & Observability
+**Goal**: Package application for deployment via Docker and Kubernetes, implement comprehensive logging.
+
+
+### Phase 11: Deferred Service Updates & Change History (P2)
+
+- T187: Refine requirements for service update flows (R19-R21, R23-R24)
+- T188: Design data model changes for service change history (ServiceChangeHistory entity)
+- T189: Define API contracts for service update endpoints (owner and admin flows)
+- T190: Identify and plan impact on dashboard (edit flows, history views)
+- T191: Create follow-up feature spec for service updates and change history (2-register-service-updates)
+**Test Criteria**:
+- ✅ Docker image builds successfully for both API and Dashboard
+- ✅ Docker Compose starts all services (postgres/redis, API, Dashboard)
+- ✅ Kubernetes manifests deploy successfully with Postgres or Redis
+- ✅ All logging requirements (R62-R66) are met with ILogger
+
+### Tasks
+
+#### Logging
+
+- [ ] T170 [P] Add ILogger to RegistrationService constructor and log registration requests at Info level (R63)
+- [ ] T171 [P] Add ILogger to AdministratorService constructor and log approval/denial actions at Info level (R64)
+- [ ] T172 [P] Add ILogger to HeartbeatService constructor and log health status transitions at Warning level (R65), missed heartbeat events at Warning level (R66)
+- [ ] T173 [P] Add ILogger to HeartbeatMonitorService and log failed heartbeat detection at Error level
+
+#### Docker
+
+- [ ] T174 Verify Dockerfile exists at `deployment/docker/Dockerfile` with multi-stage build (created in Phase 1)
+- [ ] T175 Verify docker-compose.yml exists at `deployment/docker/docker-compose.yml` with profiles for postgres and redis (created in Phase 1)
+- [ ] T176 Test Docker build: `docker build -t serviceregistry-api:latest -f deployment/docker/Dockerfile --target api-runtime .`
+- [ ] T177 Test Docker build: `docker build -t serviceregistry-dashboard:latest -f deployment/docker/Dockerfile --target dashboard-runtime .`
+- [ ] T178 Test Docker Compose with Postgres: `DATABASE_PROVIDER=Postgres docker-compose --profile postgres up`
+- [ ] T179 Test Docker Compose with Redis: `DATABASE_PROVIDER=Redis docker-compose --profile redis up`
+
+#### Kubernetes
+
+- [ ] T180 Verify Kubernetes manifests exist in `deployment/kubernetes/` (namespace, configmap, secret, postgres, redis, api-deployment, dashboard-deployment, hpa, migration-job)
+- [ ] T181 Test Kubernetes deployment with Postgres: `kubectl apply -f deployment/kubernetes/namespace.yaml`, then apply configmap, secret, postgres, migration-job, api-deployment, dashboard-deployment, hpa
+- [ ] T182 Test Kubernetes deployment with Redis: `kubectl apply -f deployment/kubernetes/namespace.yaml`, then apply configmap, secret (with Redis connection), redis, api-deployment, dashboard-deployment, hpa
+- [ ] T183 Verify HPA scales API pods based on CPU metrics: increase load, verify replicas increase from 2 to higher count
+
+#### Documentation
+
+- [ ] T184 Update README.md in repository root with project overview, prerequisites, quick start guide
+- [ ] T185 Update quickstart.md with instructions for Docker Compose and Kubernetes deployment
+- [ ] T186 Create DEPLOYMENT.md with detailed deployment instructions for production environments
+
+---
+
+## Dependency Graph
+
+### User Story Completion Order
+
+```
+Phase 1 (Setup) → Phase 2 (Foundation)
+                      ↓
+Phase 3 (US1: Registration API) ────┐
+                      ↓              │
+Phase 4 (US2: Admin Approval) ──────┤
+                      ↓              │
+Phase 5 (US3: Status Query) ────────┤── Independent Stories
+                                     │   (Can be parallelized after US1)
+Phase 6 (US4: Heartbeat) ───────────┤
+                      ↓              │
+Phase 7 (US5: Catalog) ─────────────┤
+                      ↓              │
+Phase 8 (US6: Deletion) ────────────┘
+                      ↓
+Phase 9 (US7: Dashboard) ← Depends on all API endpoints
+                      ↓
+Phase 10 (Deployment & Observability)
+```
+
+### Critical Path
+
+1. **MVP**: Phase 1 → Phase 2 → Phase 3 (US1) → Phase 4 (US2)
+   - Delivers core registration and approval workflow
+   - Estimated: 30-40 tasks
+
+2. **Full Feature**: Add Phase 5 (US3), Phase 6 (US4), Phase 7 (US5), Phase 8 (US6)
+   - Adds status query, heartbeat monitoring, catalog search, deletion
+   - Estimated: 80-100 tasks
+
+3. **Production-Ready**: Add Phase 9 (US7), Phase 10
+   - Adds dashboard UI and deployment artifacts
+   - Estimated: All 127 tasks
+
+### Parallel Execution Opportunities
+
+**Within Phase 3 (US1)**:
+- Tasks T044-T055 (storage implementations) can run in parallel
+- Postgres, Redis, and File providers are independent
+
+**Within Phase 4 (US2)**:
+- Tasks T070-T075 (repository extensions) can run in parallel
+
+**Within Phase 6 (US4)**:
+- Tasks T114-T116 (UpdateAsync implementations) can run in parallel
+
+**Within Phase 9 (US7)**:
+- Dashboard pages (T149-T154), components (T155-T158) can be built in parallel
+
+---
+
+## Implementation Notes
+
+### Storage Provider Selection
+
+Configure backend in `appsettings.json`:
+```json
+{
+  "DatabaseProvider": "Postgres",  // or "Redis", "SqlServer", "File"
+  "ConnectionStrings": {
+    "ServiceRegistry": "Host=localhost;Database=serviceregistry;..."
+  }
+}
+```
+
+### Testing Strategy
+
+- **Unit Tests**: Focus on service layer logic (validation, normalization, state transitions)
+- **Integration Tests**: Test repository implementations (Postgres, Redis, File) independently
+- **API Tests**: Use Postman collections or automated HTTP tests for endpoints
+- **Dashboard Tests**: Use bUnit for Blazor component testing
+
+### Performance Targets
+
+- Registration API: <2s (Task T067)
+- Status Query API: <1s (Task T096)
+- Heartbeat API: <500ms (Task T118)
+- Dashboard Load: <2s (Task T163)
+- SignalR Updates: <10s (Task T169)
+
+---
+
+**Generated**: November 9, 2025  
+**Total Tasks**: 186 tasks  
+**Estimated Effort**: 15-20 days (2 developers working in parallel)  
+**MVP Scope**: Phases 1-4 (core registration, status, and basic heartbeat flows; service updates and change history deferred to a future phase)

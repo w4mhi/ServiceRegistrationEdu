@@ -1,0 +1,124 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: serviceregistry-dashboard
+  namespace: serviceregistry
+  labels:
+    app: serviceregistry-dashboard
+    component: dashboard
+spec:
+  replicas: 2  # Minimum replicas for high availability
+  selector:
+    matchLabels:
+      app: serviceregistry-dashboard
+  template:
+    metadata:
+      labels:
+        app: serviceregistry-dashboard
+        component: dashboard
+    spec:
+      containers:
+      - name: dashboard
+        image: your-registry/serviceregistry-dashboard:latest  # Replace with actual image
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8082
+          name: http
+          protocol: TCP
+        env:
+        - name: ASPNETCORE_URLS
+          value: "http://+:8082"
+        - name: ConnectionStrings__ServiceRegistry
+          valueFrom:
+            secretKeyRef:
+              name: serviceregistry-secrets
+              key: database-connection-string
+        envFrom:
+        - configMapRef:
+            name: serviceregistry-config
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8082
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8082
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+      # Optional: Use pod anti-affinity to spread replicas across nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - serviceregistry-dashboard
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: serviceregistry-dashboard
+  namespace: serviceregistry
+  labels:
+    app: serviceregistry-dashboard
+spec:
+  type: ClusterIP
+  selector:
+    app: serviceregistry-dashboard
+  ports:
+  - port: 8082
+    targetPort: 8082
+    protocol: TCP
+    name: http
+  sessionAffinity: ClientIP  # Sticky sessions for SignalR connections
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+---
+# Optional: Ingress for external access
+# Uncomment and configure based on your ingress controller
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: serviceregistry-dashboard-ingress
+#   namespace: serviceregistry
+#   annotations:
+#     kubernetes.io/ingress.class: nginx
+#     cert-manager.io/cluster-issuer: letsencrypt-prod
+#     nginx.ingress.kubernetes.io/affinity: cookie  # For SignalR sticky sessions
+#     nginx.ingress.kubernetes.io/session-cookie-name: dashboard-affinity
+# spec:
+#   rules:
+#   - host: dashboard.serviceregistry.example.com
+#     http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: serviceregistry-dashboard
+#             port:
+#               number: 8082
+#   tls:
+#   - hosts:
+#     - dashboard.serviceregistry.example.com
+#     secretName: serviceregistry-dashboard-tls

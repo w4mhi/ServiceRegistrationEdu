@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Omni.ServiceRegistry.Services\Omni.ServiceRegistry.Services.csproj" />
+    <ProjectReference Include="..\Omni.ServiceRegistry.Data\Omni.ServiceRegistry.Data.csproj" />
+    <ProjectReference Include="..\Omni.ServiceRegistry.Interfaces\Omni.ServiceRegistry.Interfaces.csproj" />
+    <ProjectReference Include="..\Omni.ServiceRegistry.Models\Omni.ServiceRegistry.Models.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
+    <PackageReference Include="Serilog.Extensions.Logging.File" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ScopedCssEnabled>false</ScopedCssEnabled>
+  </PropertyGroup>
+
+</Project>

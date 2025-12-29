@@ -1,0 +1,448 @@
+@page "/approvals"
+@rendermode InteractiveServer
+@inject ServiceRegistryApiClient ApiClient
+@inject SignalRHubClient HubClient
+@inject NavigationManager Navigation
+@inject ILogger<PendingApprovals> Logger
+@implements IAsyncDisposable
+
+<PageTitle>Pending Approvals</PageTitle>
+
+<div class="page-header-modern">
+    <h1 class="page-title-modern">📋 Registration Management</h1>
+    <button class="btn-refresh-top" @onclick="RefreshRegistrations">
+        <i class="bi bi-arrow-clockwise"></i>
+        <span>Refresh</span>
+    </button>
+</div>
+
+<!-- Tab Navigation -->
+<div class="approval-tabs">
+    <button class="approval-tab @(activeTab == "pending" ? "active" : "")" 
+            @onclick="@(() => SwitchTab("pending"))">
+        <i class="bi bi-clock-history"></i>
+        <span>Pending Approvals</span>
+        <span class="tab-badge">@pendingCount</span>
+    </button>
+    <button class="approval-tab @(activeTab == "denied" ? "active" : "") @(deniedCount > 0 ? "has-denied" : "")" 
+            @onclick="@(() => SwitchTab("denied"))">
+        <i class="bi bi-x-octagon"></i>
+        <span>Denied Services</span>
+        <span class="tab-badge denied">@deniedCount</span>
+    </button>
+</div>
+
+<!-- Pending Approvals Section -->
+@if (activeTab == "pending")
+{
+    <div class="approvals-card-modern">
+        <div class="approvals-header-modern">
+            <h4><i class="bi bi-clipboard-check-fill"></i>Pending Registration Requests</h4>
+        </div>
+        <div class="p-0">
+            @if (registrations == null)
+            {
+                <div class="loading-modern">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p>Loading registrations...</p>
+                </div>
+            }
+            else if (pendingRegistrations.Count == 0)
+            {
+                <div class="empty-state-modern">
+                    <i class="bi bi-check-circle" style="color: #16a34a;"></i>
+                    <p>No pending registration requests</p>
+                    <small style="color: #94a3b8;">All services have been reviewed</small>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover table-modern-approvals mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">Service Details</th>
+                                <th>Owner</th>
+                                <th>Submitted</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (RegistrationRequest reg in pendingRegistrations)
+                            {
+                                <tr class="registration-row-modern">
+                                    <td class="ps-4">
+                                        <div class="service-name-approvals">@reg.ServiceName</div>
+                                        <div class="service-desc-approvals">@reg.Description</div>
+                                    </td>
+                                    <td>
+                                        <div style="font-weight: 600; color: #1e293b;">@reg.ContactEmail</div>
+                                    </td>
+                                    <td>
+                                        <div style="font-weight: 600;">@reg.CreatedAt.ToLocalTime().ToString("MMM dd, yyyy")</div>
+                                        <small style="color: #94a3b8;">@reg.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</small>
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn-approve-modern me-2" 
+                                                @onclick="@(() => ShowApprovalModal(reg.RegistrationId))"
+                                                type="button">
+                                            <i class="bi bi-check-circle me-1"></i>Approve
+                                        </button>
+                                        <button class="btn-deny-modern" 
+                                                @onclick="@(() => ShowDenialModal(reg.RegistrationId))"
+                                                type="button">
+                                            <i class="bi bi-x-circle me-1"></i>Deny
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<!-- Denied Services Section -->
+@if (activeTab == "denied")
+{
+    <div class="approvals-card-modern denied-section">
+        <div class="approvals-header-modern denied-header">
+            <h4><i class="bi bi-x-octagon-fill"></i>Denied Registration Requests</h4>
+        </div>
+        <div class="p-0">
+            @if (registrations == null)
+            {
+                <div class="loading-modern">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p>Loading registrations...</p>
+                </div>
+            }
+            else if (deniedRegistrations.Count == 0)
+            {
+                <div class="empty-state-modern">
+                    <i class="bi bi-inbox"></i>
+                    <p>No denied registration requests</p>
+                    <small style="color: #94a3b8;">No services have been denied</small>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover table-modern-approvals mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">Service Details</th>
+                                <th>Owner</th>
+                                <th>Denied Date</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (RegistrationRequest reg in deniedRegistrations)
+                            {
+                                <tr class="registration-row-modern denied-row">
+                                    <td class="ps-4">
+                                        <div class="denied-service-name">
+                                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                            @reg.ServiceName
+                                        </div>
+                                        <div class="denied-service-desc">@reg.Description</div>
+                                        <div class="denied-reason">
+                                            <i class="bi bi-chat-left-text-fill me-2"></i>
+                                            <strong>Denial Reason:</strong> 
+                                            @if (!string.IsNullOrEmpty(reg.ReviewComments))
+                                            {
+                                                <span>@reg.ReviewComments</span>
+                                            }
+                                            else
+                                            {
+                                                <span style="color: #94a3b8; font-style: italic;">(No reason provided)</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="denied-email">@reg.ContactEmail</div>
+                                    </td>
+                                    <td>
+                                        @if (reg.ReviewedAt.HasValue)
+                                        {
+                                            <div class="denied-date">@reg.ReviewedAt.Value.ToLocalTime().ToString("MMM dd, yyyy")</div>
+                                            <small class="denied-time">@reg.ReviewedAt.Value.ToLocalTime().ToString("HH:mm:ss")</small>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn-reapprove" 
+                                                @onclick="@(() => ShowApprovalModal(reg.RegistrationId))"
+                                                type="button"
+                                                title="Re-approve this denied registration">
+                                            <i class="bi bi-arrow-counterclockwise me-1"></i>Re-approve
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (showApprovalModal)
+{
+    <div class="modal modal-modern show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-check-circle-fill me-2"></i>Approve Registration</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size: 1.05rem; color: #1e293b; margin-bottom: 1.5rem;">Are you sure you want to approve this registration?</p>
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert-modern-danger mb-3">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                        </div>
+                    }
+                    <div class="mb-3">
+                        <label class="form-label">Comments (optional)</label>
+                        <textarea class="form-control" rows="3" @bind="approvalComments" placeholder="Add any notes or comments..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal-cancel" @onclick="CloseModals">Cancel</button>
+                    <button type="button" class="btn-approve-modern" @onclick="ApproveRegistration">
+                        <i class="bi bi-check-circle me-1"></i>Approve
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+@if (showDenialModal)
+{
+    <div class="modal modal-modern show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-x-circle-fill me-2"></i>Deny Registration</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size: 1.05rem; color: #1e293b; margin-bottom: 1.5rem;">Please provide a reason for denial:</p>
+                    <div class="mb-3">
+                        <label class="form-label">Reason (Required - minimum 10 characters)</label>
+                        <textarea class="form-control" rows="4" @bind="denialReason" required placeholder="Explain why this registration is being denied..."></textarea>
+                        <small class="form-text" style="display: block; margin-top: 0.25rem; color: @(denialReason.Length >= 10 ? "#16a34a" : "#94a3b8");">
+                            @denialReason.Length / 10 characters minimum
+                        </small>
+                    </div>
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert-modern-danger">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal-cancel" @onclick="CloseModals">Cancel</button>
+                    <button type="button" class="btn-deny-modern" @onclick="DenyRegistration">
+                        <i class="bi bi-x-circle me-1"></i>Deny
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+@code {
+    private List<RegistrationRequest>? registrations;
+    private string activeTab = "pending";
+    private bool showApprovalModal = false;
+    private bool showDenialModal = false;
+    private string? errorMessage = null;
+    private Guid selectedRegistrationId;
+    private string approvalComments = "";
+    private string denialReason = "";
+
+    private List<RegistrationRequest> pendingRegistrations => 
+        registrations?.Where(r => r.Status == RegistrationStatus.Pending).ToList() ?? new List<RegistrationRequest>();
+    
+    private List<RegistrationRequest> deniedRegistrations => 
+        registrations?.Where(r => r.Status == RegistrationStatus.Denied).ToList() ?? new List<RegistrationRequest>();
+    
+    private int pendingCount => pendingRegistrations.Count;
+    private int deniedCount => deniedRegistrations.Count;
+
+    private void SwitchTab(string tab)
+    {
+        activeTab = tab;
+        StateHasChanged();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Logger.LogInformation("PendingApprovals page initialized");
+        Console.WriteLine("PendingApprovals page initialized");
+        await LoadRegistrations();
+        
+        // Subscribe to SignalR events
+        HubClient.OnRegistrationApproved(async (registrationId, serviceId) =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadRegistrations();
+                StateHasChanged();
+            });
+        });
+        
+        HubClient.OnRegistrationDenied(async (registrationId) =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadRegistrations();
+                StateHasChanged();
+            });
+        });
+        
+        // Start SignalR connection if not already started
+        try
+        {
+            await HubClient.StartAsync();
+        }
+        catch (Exception)
+        {
+            // Connection already started by Index.razor
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // Don't stop connection here - it's shared across pages
+        await Task.CompletedTask;
+    }
+
+    private async Task LoadRegistrations()
+    {
+        registrations = await ApiClient.GetAllRegistrationsAsync();
+    }
+
+    private async Task RefreshRegistrations()
+    {
+        await LoadRegistrations();
+    }
+
+    private void ShowApprovalModal(Guid registrationId)
+    {
+        Logger.LogInformation("ShowApprovalModal called for {RegistrationId}", registrationId);
+        Console.WriteLine($"ShowApprovalModal called for {registrationId}");
+        selectedRegistrationId = registrationId;
+        approvalComments = "";
+        errorMessage = null;
+        showApprovalModal = true;
+        StateHasChanged(); // Force UI update to show modal
+    }
+
+    private void ShowDenialModal(Guid registrationId)
+    {
+        Logger.LogInformation("ShowDenialModal called for {RegistrationId}", registrationId);
+        selectedRegistrationId = registrationId;
+        denialReason = "";
+        errorMessage = null;
+        showDenialModal = true;
+        StateHasChanged(); // Force UI update to show modal
+    }
+
+    private void CloseModals()
+    {
+        Logger.LogInformation("CloseModals called");
+        showApprovalModal = false;
+        showDenialModal = false;
+    }
+
+    private async Task ApproveRegistration()
+    {
+        Logger.LogInformation("ApproveRegistration called for {RegistrationId}", selectedRegistrationId);
+        Console.WriteLine($"ApproveRegistration called for {selectedRegistrationId}");
+        
+        try
+        {
+            errorMessage = null;
+            bool success = await ApiClient.ApproveRegistrationAsync(selectedRegistrationId, "dashboard-admin", approvalComments);
+            
+            Console.WriteLine($"Approval result: {success}");
+            
+            if (success)
+            {
+                CloseModals();
+                await LoadRegistrations();
+                StateHasChanged(); // Force UI update
+            }
+            else
+            {
+                errorMessage = "Failed to approve registration. Please try again.";
+                StateHasChanged(); // Force error message to display
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error approving registration: {ex.Message}";
+            Console.WriteLine($"Error approving registration: {ex.Message}");
+            StateHasChanged(); // Force error message to display
+        }
+    }
+
+    private async Task DenyRegistration()
+    {
+        if (string.IsNullOrWhiteSpace(denialReason))
+        {
+            errorMessage = "Denial reason is required. Please provide a reason.";
+            StateHasChanged();
+            return;
+        }
+        
+        // Client-side validation: minimum 10 characters
+        if (denialReason.Length < 10)
+        {
+            errorMessage = "Denial reason is too short. Please provide at least 10 characters.";
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            (bool success, string? error) = await ApiClient.DenyRegistrationAsync(selectedRegistrationId, "dashboard-admin", denialReason);
+            
+            if (success)
+            {
+                CloseModals();
+                await LoadRegistrations();
+                // Switch to denied tab to show the result
+                activeTab = "denied";
+                StateHasChanged();
+            }
+            else
+            {
+                Console.WriteLine($"Failed to deny registration {selectedRegistrationId}: {error}");
+                errorMessage = error ?? "Failed to deny registration. Please try again.";
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error denying registration: {ex.Message}");
+            errorMessage = $"Error: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+}

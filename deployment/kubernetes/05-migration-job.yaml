@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration
+  namespace: service-registry
+spec:
+  template:
+    metadata:
+      labels:
+        app: db-migration
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: migration
+        image: service-registry-api:latest
+        command:
+        - dotnet
+        - ef
+        - database
+        - update
+        - --no-build
+        env:
+        - name: ConnectionStrings__ServiceRegistry
+          valueFrom:
+            secretKeyRef:
+              name: service-registry-secrets
+              key: postgres-connection
+        - name: DatabaseProvider
+          valueFrom:
+            configMapKeyRef:
+              name: service-registry-config
+              key: DatabaseProvider
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z postgres-service 5432; do
+            echo "Waiting for postgres..."
+            sleep 2
+          done
