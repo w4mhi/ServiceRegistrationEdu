@@ -2,6 +2,8 @@
 @rendermode InteractiveServer
 @inject ServiceRegistryApiClient ApiClient
 @inject NavigationManager Navigation
+@using Omni.ServiceRegistry.Models
+@using System.Text.Json
 
 <PageTitle>Service Details</PageTitle>
 
@@ -192,6 +194,59 @@ else
                     </div>
                 </div>
             </div>
+
+            <!-- API Endpoints Card -->
+            @{
+                List<ApiEndpoint> apiEndpoints = GetApiEndpoints(service);
+            }
+            @if (apiEndpoints.Count > 0)
+            {
+                <div class="detail-card mb-4">
+                    <div class="detail-card-header">
+                        <div class="detail-card-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <i class="bi bi-code-slash"></i>
+                        </div>
+                        <h4>API Endpoints</h4>
+                        <span class="badge" style="background: #667eea; color: white; margin-left: auto;">@apiEndpoints.Count endpoints</span>
+                    </div>
+                    <div class="detail-card-body">
+                        @foreach (ApiEndpoint apiEndpoint in apiEndpoints)
+                        {
+                            <div class="api-endpoint-item" style="margin-bottom: 1rem; padding: 0.75rem; background: #f8fafc; border-radius: 0.5rem; border-left: 3px solid @GetMethodColor(apiEndpoint.Method);">
+                                <div class="d-flex align-items-start justify-content-between mb-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge" style="background: @GetMethodColor(apiEndpoint.Method); color: white; font-family: monospace; font-size: 0.75rem; font-weight: 600;">
+                                            @apiEndpoint.Method
+                                        </span>
+                                        <code style="background: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem; color: #475569; font-size: 0.85rem;">@apiEndpoint.Path</code>
+                                    </div>
+                                    @if (apiEndpoint.RequiresAuth)
+                                    {
+                                        <span class="badge" style="background: #fbbf24; color: #78350f; font-size: 0.7rem;">
+                                            <i class="bi bi-lock-fill me-1"></i>Auth Required
+                                        </span>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(apiEndpoint.Description))
+                                {
+                                    <div style="font-size: 0.85rem; color: #64748b; margin-bottom: 0.5rem;">
+                                        @apiEndpoint.Description
+                                    </div>
+                                }
+                                @if (apiEndpoint.Tags != null && apiEndpoint.Tags.Length > 0)
+                                {
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        @foreach (string tag in apiEndpoint.Tags)
+                                        {
+                                            <span class="badge" style="background: #e2e8f0; color: #475569; font-size: 0.7rem;">@tag</span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
         </div>
 
         <div class="col-lg-4">
@@ -413,5 +468,33 @@ else
         if (service.MaxMissedHeartbeats == 0) return "100";
         double uptime = ((double)(service.MaxMissedHeartbeats - service.MissedHeartbeatCounter) / service.MaxMissedHeartbeats) * 100;
         return Math.Max(0, uptime).ToString("F1");
+    }
+
+    private string GetMethodColor(string method)
+    {
+        return method.ToUpperInvariant() switch
+        {
+            "GET" => "#10b981",      // Green
+            "POST" => "#3b82f6",     // Blue
+            "PUT" => "#f59e0b",      // Orange
+            "PATCH" => "#8b5cf6",    // Purple
+            "DELETE" => "#ef4444",   // Red
+            _ => "#64748b"           // Gray
+        };
+    }
+
+    private List<ApiEndpoint> GetApiEndpoints(Service service)
+    {
+        if (string.IsNullOrEmpty(service.ApiEndpoints))
+            return new List<ApiEndpoint>();
+        
+        try
+        {
+            return JsonSerializer.Deserialize<List<ApiEndpoint>>(service.ApiEndpoints) ?? new List<ApiEndpoint>();
+        }
+        catch
+        {
+            return new List<ApiEndpoint>();
+        }
     }
 }

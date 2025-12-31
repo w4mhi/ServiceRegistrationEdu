@@ -1,0 +1,95 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Inventory Service API",
+    "version": "1.0.0",
+    "description": "Manages product inventory, stock levels, and warehouse operations"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "summary": "Health check endpoint",
+        "description": "Returns service health status",
+        "tags": ["Health"],
+        "responses": {
+          "200": { "description": "Service is healthy" }
+        }
+      }
+    },
+    "/api/v1/inventory": {
+      "get": {
+        "summary": "Get inventory levels",
+        "description": "Retrieves current stock levels for all products",
+        "tags": ["Inventory"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Inventory data retrieved" }
+        }
+      }
+    },
+    "/api/v1/inventory/{productId}": {
+      "get": {
+        "summary": "Get product stock",
+        "description": "Retrieves stock level for specific product",
+        "tags": ["Inventory"],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Product stock retrieved" }
+        }
+      },
+      "put": {
+        "summary": "Update stock level",
+        "description": "Updates inventory quantity for a product",
+        "tags": ["Inventory"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Stock level updated" }
+        }
+      }
+    },
+    "/api/v1/reservations": {
+      "post": {
+        "summary": "Reserve inventory",
+        "description": "Reserves inventory for pending orders",
+        "tags": ["Reservations"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Inventory reserved" }
+        }
+      }
+    },
+    "/api/v1/warehouses": {
+      "get": {
+        "summary": "List warehouses",
+        "description": "Retrieves all warehouse locations",
+        "tags": ["Warehouses"],
+        "responses": {
+          "200": { "description": "Warehouse list retrieved" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -29,7 +30,11 @@ using Scalar.AspNetCore;
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 
@@ -84,6 +89,16 @@ builder.Services.AddRateLimiter(options =>
         config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         config.QueueLimit = builder.Configuration.GetValue<int>("RateLimiting:Restoration:QueueLimit", 2);
     });
+    
+    // Rate limiting for health insights analysis endpoints
+    // Server-side limit: 5 requests per 5 minutes per user
+    options.AddFixedWindowLimiter("insights", config =>
+    {
+        config.PermitLimit = 5;
+        config.Window = TimeSpan.FromMinutes(5);
+        config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        config.QueueLimit = 2;
+    });
 });
 
 // Register core services
@@ -109,6 +124,8 @@ if (databaseProvider == "Postgres")
     builder.Services.AddScoped<IServiceRepository, PostgresServiceRepository>();
     builder.Services.AddScoped<IChangeHistoryRepository, PostgresChangeHistoryRepository>();
     builder.Services.AddScoped<IDeletionCycleRepository, DeletionCycleRepository>();
+    builder.Services.AddScoped<IHealthInsightsRepository, HealthInsightsRepository>();
+    builder.Services.AddScoped<IAnalysisTriggerLogRepository, AnalysisTriggerLogRepository>();
 }
 else
 {
@@ -121,10 +138,31 @@ builder.Services.AddScoped<IRegistrationService, RegistrationService>();
 builder.Services.AddScoped<IAdministratorService, AdministratorService>();
 builder.Services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
 builder.Services.AddScoped<IHeartbeatService, HeartbeatService>();
+builder.Services.AddScoped<IContractValidationService, ContractValidationService>();
+
+// Register HttpClient for LLM services
+builder.Services.AddHttpClient();
+
+// Register LLM and Health Insights services
+builder.Services.AddSingleton<Omni.ServiceRegistry.Services.LLM.OllamaService>();
+builder.Services.AddScoped<Omni.ServiceRegistry.Services.HealthInsights.ContextGathererService>();
+
+// Register PromptTemplateService with configurable SystemPrompt
+builder.Services.AddSingleton<Omni.ServiceRegistry.Services.LLM.PromptTemplateService>(serviceProvider =>
+{
+    IConfiguration configuration = serviceProvider.GetRequiredService<IConfiguration>();
+    string? systemPrompt = configuration.GetValue<string>("HealthInsights:SystemPrompt");
+    return new Omni.ServiceRegistry.Services.LLM.PromptTemplateService(systemPrompt);
+});
+
+builder.Services.AddScoped<IHealthInsightsAnalysisService, Omni.ServiceRegistry.Services.HealthInsights.HealthInsightsAnalysisService>();
+builder.Services.AddSingleton<Omni.ServiceRegistry.Services.HealthInsights.AnalysisQueueService>();
 
 // Register background services - HeartbeatMonitorService and RestorationBadgeCleanupService create their own scopes
 builder.Services.AddHostedService<HeartbeatMonitorService>();
 builder.Services.AddHostedService<RestorationBadgeCleanupService>();
+builder.Services.AddHostedService<HealthInsightsWorker>();
+builder.Services.AddHostedService<BatchAnalysisScheduler>(); // Configure via HealthInsights:EnableAutomaticAIAnalysis
 
 WebApplication app = builder.Build();
 

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 using Microsoft.Extensions.Logging;
 using Omni.ServiceRegistry.Client.Models;
+using Omni.ServiceRegistry.Models;
 
 namespace Omni.ServiceRegistry.Client;
 
@@ -17,6 +18,10 @@ public class SimulatedService
     private readonly ServiceRegistryClient client;
     private readonly ILogger<SimulatedService> logger;
     private readonly string serviceName;
+    private readonly string description;
+    private readonly string contactEmail;
+    private readonly List<string> endpoints;
+    private readonly List<ApiEndpoint>? apiEndpoints;
     private readonly int heartbeatTimeout;
     private readonly int maxMissedHeartbeats;
     private readonly HealthScenario scenario;
@@ -37,6 +42,10 @@ public class SimulatedService
         ServiceRegistryClient client,
         ILogger<SimulatedService> logger,
         string serviceName,
+        string description,
+        string contactEmail,
+        List<string> endpoints,
+        List<ApiEndpoint>? apiEndpoints,
         int heartbeatTimeout,
         int maxMissedHeartbeats,
         HealthScenario scenario)
@@ -44,6 +53,10 @@ public class SimulatedService
         this.client = client;
         this.logger = logger;
         this.serviceName = serviceName;
+        this.description = description;
+        this.contactEmail = contactEmail;
+        this.endpoints = endpoints;
+        this.apiEndpoints = apiEndpoints;
         this.heartbeatTimeout = heartbeatTimeout;
         this.maxMissedHeartbeats = maxMissedHeartbeats;
         this.scenario = scenario;
@@ -103,9 +116,10 @@ public class SimulatedService
         RegistrationRequestDto request = new()
         {
             ServiceName = serviceName,
-            Description = $"Simulated service testing {scenario} scenario",
-            ContactEmail = $"{serviceName}@simulation.local",
-            Endpoints = new List<string> { $"https://api.simulation.local/{serviceName}" },
+            Description = description,
+            ContactEmail = contactEmail,
+            Endpoints = endpoints,
+            ApiEndpoints = apiEndpoints,
             HeartbeatTimeout = heartbeatTimeout,
             MaxMissedHeartbeats = maxMissedHeartbeats
         };

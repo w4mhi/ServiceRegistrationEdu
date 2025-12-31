@@ -188,6 +188,12 @@ public class HeartbeatMonitorService : BackgroundService, IHeartbeatMonitorServi
             
             await NotifyHealthChangeAsync(service, previousStatus, newStatus, scope, loggerToUse);
             LogHealthDegradation(service, previousStatus, newStatus, missedCount, loggerToUse);
+            
+            // Trigger analysis on critical health transitions
+            if (ShouldTriggerAnalysis(previousStatus, newStatus))
+            {
+                await TriggerAnalysisAsync(service.ServiceId, scope, loggerToUse);
+            }
         }
     }
     
@@ -307,6 +313,59 @@ public class HeartbeatMonitorService : BackgroundService, IHeartbeatMonitorServi
         {
             // No missed heartbeats - maintain current status or set to HEALTHY
             return currentStatus == HealthStatus.Recovered ? HealthStatus.Healthy : currentStatus;
+        }
+    }
+    
+    /// <summary>
+    /// Determine if analysis should be triggered based on health transition
+    /// </summary>
+    private bool ShouldTriggerAnalysis(HealthStatus previousStatus, HealthStatus newStatus)
+    {
+        // Trigger on critical transitions: HEALTHY → DEAD or HEALTHY → DEGRADED
+        if (previousStatus == HealthStatus.Healthy && newStatus == HealthStatus.Dead)
+        {
+            return true;
+        }
+        
+        if (previousStatus == HealthStatus.Healthy && newStatus == HealthStatus.Degraded)
+        {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /// <summary>
+    /// Queue service for health analysis
+    /// </summary>
+    private async Task TriggerAnalysisAsync(Guid serviceId, IServiceScope scope, ILogger loggerToUse)
+    {
+        try
+        {
+            HealthInsights.AnalysisQueueService? queueService = 
+                scope.ServiceProvider.GetService<HealthInsights.AnalysisQueueService>();
+            
+            if (queueService == null)
+            {
+                loggerToUse.LogWarning("AnalysisQueueService not available, skipping analysis trigger for service {ServiceId}", serviceId);
+                return;
+            }
+            
+            HealthInsights.AnalysisRequest request = new HealthInsights.AnalysisRequest
+            {
+                ServiceId = serviceId,
+                TriggeredBy = "HeartbeatMonitor",
+                IsManualTrigger = false,
+                Priority = 2 // Higher priority for real-time triggers
+            };
+            
+            await queueService.EnqueueAsync(request, CancellationToken.None);
+            
+            loggerToUse.LogInformation("Queued service {ServiceId} for automatic health analysis", serviceId);
+        }
+        catch (Exception ex)
+        {
+            loggerToUse.LogError(ex, "Failed to queue service {ServiceId} for analysis", serviceId);
         }
     }
 }

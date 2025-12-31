@@ -1,0 +1,72 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Analytics Service API",
+    "version": "1.0.0",
+    "description": "Provides analytics, metrics, and business intelligence"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "summary": "Health check endpoint",
+        "description": "Returns service health status",
+        "tags": ["Health"],
+        "responses": {
+          "200": { "description": "Service is healthy" }
+        }
+      }
+    },
+    "/api/v1/analytics/users": {
+      "get": {
+        "summary": "Get user analytics",
+        "description": "Retrieves user behavior analytics",
+        "tags": ["Analytics"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "User analytics retrieved" }
+        }
+      }
+    },
+    "/api/v1/analytics/revenue": {
+      "get": {
+        "summary": "Get revenue metrics",
+        "description": "Retrieves revenue and financial metrics",
+        "tags": ["Analytics"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Revenue metrics retrieved" }
+        }
+      }
+    },
+    "/api/v1/analytics/conversions": {
+      "get": {
+        "summary": "Get conversion metrics",
+        "description": "Retrieves conversion funnel analytics",
+        "tags": ["Analytics"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Conversion metrics retrieved" }
+        }
+      }
+    },
+    "/api/v1/dashboards": {
+      "get": {
+        "summary": "List dashboards",
+        "description": "Retrieves available analytics dashboards",
+        "tags": ["Dashboards"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Dashboard list retrieved" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

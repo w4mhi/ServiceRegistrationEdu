@@ -71,6 +71,21 @@ public class AdministratorService : IAdministratorService
         
         return all;
     }
+    
+    /// <summary>
+    /// Get a registration request by ID
+    /// </summary>
+    public async Task<RegistrationRequest?> GetRegistrationByIdAsync(Guid registrationId)
+    {
+        RegistrationRequest? registration = await registrationRepository.GetByIdAsync(registrationId);
+        
+        if (registration == null)
+        {
+            logger?.LogWarning("Registration request {RegistrationId} not found", registrationId);
+        }
+        
+        return registration;
+    }
 
     /// <summary>
     /// Approve a registration request and create service (R11-R12)
@@ -115,6 +130,7 @@ public class AdministratorService : IAdministratorService
             Description = request.Description,
             ContactEmail = request.ContactEmail,
             Endpoints = request.Endpoints,
+            ApiEndpoints = request.ApiEndpoints,
             HeartbeatTimeout = request.HeartbeatTimeout,
             MaxMissedHeartbeats = request.MaxMissedHeartbeats,
             HealthStatus = HealthStatus.Healthy,

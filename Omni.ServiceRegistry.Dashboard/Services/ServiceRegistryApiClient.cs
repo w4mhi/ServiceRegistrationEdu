@@ -22,11 +22,16 @@ namespace Omni.ServiceRegistry.Dashboard.Services;
 public class ServiceRegistryApiClient
 {
     private readonly HttpClient httpClient;
+    private readonly JsonSerializerOptions jsonOptions;
     private readonly ILogger<ServiceRegistryApiClient> logger;
 
-    public ServiceRegistryApiClient(HttpClient httpClient, ILogger<ServiceRegistryApiClient> logger)
+    public ServiceRegistryApiClient(
+        HttpClient httpClient, 
+        JsonSerializerOptions jsonOptions,
+        ILogger<ServiceRegistryApiClient> logger)
     {
         this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        this.jsonOptions = jsonOptions ?? throw new ArgumentNullException(nameof(jsonOptions));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -37,7 +42,7 @@ public class ServiceRegistryApiClient
         {
             // Fetch all registrations (pending and denied) for the management page
             List<RegistrationRequestDto>? dtos = await httpClient.GetFromJsonAsync<List<RegistrationRequestDto>>(
-                "/api/v1/admin/registrations/all");
+                "/api/v1/admin/registrations/all", jsonOptions);
             if (dtos == null) return new List<RegistrationRequest>();
             return dtos.Select(ConvertDtoToRegistrationRequest).ToList();
         }
@@ -49,7 +54,7 @@ public class ServiceRegistryApiClient
             try
             {
                 List<RegistrationRequestDto>? dtos = await httpClient.GetFromJsonAsync<List<RegistrationRequestDto>>(
-                    "/api/v1/admin/registrations/pending");
+                    "/api/v1/admin/registrations/pending", jsonOptions);
                 if (dtos == null) return new List<RegistrationRequest>();
                 return dtos.Select(ConvertDtoToRegistrationRequest).ToList();
             }
@@ -61,7 +66,7 @@ public class ServiceRegistryApiClient
 #pragma warning restore CA1031
     }
 
-    public async Task<bool> ApproveRegistrationAsync(Guid registrationId, string approvedBy, string? comments)
+    public async Task<(bool success, string? errorMessage)> ApproveRegistrationAsync(Guid registrationId, string approvedBy, string? comments)
     {
         try
         {
@@ -69,20 +74,69 @@ public class ServiceRegistryApiClient
             // Use property names matching ApprovalRequestDto (ApprovedBy, Comments)
             HttpResponseMessage response = await httpClient.PostAsJsonAsync(
                 $"/api/v1/admin/registrations/{registrationId}/approve",
-                new { ApprovedBy = approvedBy, Comments = comments });
-            logger.LogInformation("Approval response status: {StatusCode}", response.StatusCode);
+                new { ApprovedBy = approvedBy, Comments = comments }, jsonOptions);
+            
             if (!response.IsSuccessStatusCode)
             {
                 string content = await response.Content.ReadAsStringAsync();
                 logger.LogError("Approval failed: {StatusCode} - {Content}", response.StatusCode, content);
+                
+                // Try to parse ProblemDetails for detailed error message
+                try
+                {
+                    using JsonDocument doc = JsonDocument.Parse(content);
+                    if (doc.RootElement.TryGetProperty("detail", out JsonElement detailElement))
+                    {
+                        return (false, detailElement.GetString());
+                    }
+                    if (doc.RootElement.TryGetProperty("title", out JsonElement titleElement))
+                    {
+                        return (false, titleElement.GetString());
+                    }
+                }
+                catch
+                {
+                    // If parsing fails, return generic message
+                }
+                
+                return (false, $"Failed to approve: HTTP {response.StatusCode}");
             }
-            return response.IsSuccessStatusCode;
+            
+            logger.LogInformation("Approval response status: {StatusCode}", response.StatusCode);
+            return (true, null);
         }
 #pragma warning disable CA1031
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to approve registration {RegistrationId}", registrationId);
-            return false;
+            logger.LogError(ex, "Error approving registration {RegistrationId}", registrationId);
+            return (false, $"Error: {ex.Message}");
+        }
+#pragma warning restore CA1031
+    }
+
+    public async Task<ValidationResultDto?> ValidateRegistrationAsync(Guid registrationId)
+    {
+        try
+        {
+            logger.LogInformation("Validating registration {RegistrationId}", registrationId);
+            HttpResponseMessage response = await httpClient.PostAsync(
+                $"/api/v1/admin/registrations/{registrationId}/validate",
+                null);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                string content = await response.Content.ReadAsStringAsync();
+                logger.LogError("Validation failed: {StatusCode} - {Content}", response.StatusCode, content);
+                return null;
+            }
+            
+            return await response.Content.ReadFromJsonAsync<ValidationResultDto>();
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to validate registration {RegistrationId}", registrationId);
+            return null;
         }
 #pragma warning restore CA1031
     }
@@ -196,7 +250,7 @@ public class ServiceRegistryApiClient
     {
         try
         {
-            List<ServiceDto>? dtos = await httpClient.GetFromJsonAsync<List<ServiceDto>>("/api/v1/catalog");
+            List<ServiceDto>? dtos = await httpClient.GetFromJsonAsync<List<ServiceDto>>("/api/v1/catalog", jsonOptions);
             if (dtos == null) return new List<Service>();
             return dtos.Select(ConvertDtoToService).ToList();
         }
@@ -214,7 +268,7 @@ public class ServiceRegistryApiClient
         try
         {
             ServiceStatusResponseDto? dto = await httpClient.GetFromJsonAsync<ServiceStatusResponseDto>(
-                $"/api/v1/status/service/{serviceId}");
+                $"/api/v1/status/service/{serviceId}", jsonOptions);
             return dto != null ? ConvertStatusDtoToService(dto) : null;
         }
 #pragma warning disable CA1031
@@ -231,7 +285,7 @@ public class ServiceRegistryApiClient
         try
         {
             List<ServiceDto>? dtos = await httpClient.GetFromJsonAsync<List<ServiceDto>>(
-                $"/api/v1/catalog?healthStatus={status}");
+                $"/api/v1/catalog?healthStatus={status}", jsonOptions);
             if (dtos == null) return new List<Service>();
             return dtos.Select(ConvertDtoToService).ToList();
         }
@@ -250,7 +304,7 @@ public class ServiceRegistryApiClient
         try
         {
             List<ServiceDto>? dtos = await httpClient.GetFromJsonAsync<List<ServiceDto>>(
-                "/api/v1/admin/deletions/pending");
+                "/api/v1/admin/deletions/pending", jsonOptions);
             if (dtos == null) return new List<Service>();
             
             return dtos.Select(dto => ConvertDtoToService(dto)).ToList();
@@ -269,7 +323,7 @@ public class ServiceRegistryApiClient
         try
         {
             // Get deleted services from admin history endpoint
-            List<ServiceDto>? dtos = await httpClient.GetFromJsonAsync<List<ServiceDto>>("/api/v1/admin/deletions/history");
+            List<ServiceDto>? dtos = await httpClient.GetFromJsonAsync<List<ServiceDto>>("/api/v1/admin/deletions/history", jsonOptions);
             if (dtos == null) return new List<Service>();
             
             return dtos.Select(dto => ConvertDtoToService(dto)).ToList();
@@ -412,7 +466,7 @@ public class ServiceRegistryApiClient
         try
         {
             List<ServiceDeletionCycleDto>? cycles = await httpClient.GetFromJsonAsync<List<ServiceDeletionCycleDto>>(
-                $"/api/v1/admin/services/{serviceId}/deletion-cycles");
+                $"/api/v1/admin/services/{serviceId}/deletion-cycles", jsonOptions);
             return cycles ?? new List<ServiceDeletionCycleDto>();
         }
 #pragma warning disable CA1031 // Dashboard API client returns empty/default for all errors
@@ -455,6 +509,7 @@ public class ServiceRegistryApiClient
             Description = dto.Description,
             ContactEmail = dto.ContactEmail,
             Endpoints = JsonSerializer.Serialize(dto.Endpoints),
+            ApiEndpoints = dto.ApiEndpoints != null ? JsonSerializer.Serialize(dto.ApiEndpoints) : null,
             HealthStatus = Enum.Parse<HealthStatus>(dto.HealthStatus),
             LastHeartbeatTimestamp = dto.LastHeartbeatTimestamp,
             HeartbeatTimeout = dto.HeartbeatTimeout,
@@ -499,7 +554,7 @@ public class ServiceRegistryApiClient
         try
         {
             List<RecentlyRestoredServiceDto>? dtos = await httpClient.GetFromJsonAsync<List<RecentlyRestoredServiceDto>>(
-                "/api/v1/admin/services/recently-restored");
+                "/api/v1/admin/services/recently-restored", jsonOptions);
             return dtos ?? new List<RecentlyRestoredServiceDto>();
         }
 #pragma warning disable CA1031 // Dashboard API client returns empty/default for all errors

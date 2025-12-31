@@ -123,6 +123,42 @@ public class SignalRHubClient : IAsyncDisposable
         logger.LogTrace("Subscribed to RegistrationDenied events");
     }
 
+    /// <summary>
+    /// Subscribe to analysis started events
+    /// </summary>
+    public void OnAnalysisStarted(Func<Guid, DateTime, Task> handler)
+    {
+        hubConnection.On<Guid, DateTime>("AnalysisStarted", handler);
+        logger.LogTrace("Subscribed to AnalysisStarted events");
+    }
+
+    /// <summary>
+    /// Subscribe to analysis completed events
+    /// </summary>
+    public void OnAnalysisCompleted(Func<Guid, Guid, DateTime, Task> handler)
+    {
+        hubConnection.On<Guid, Guid, DateTime>("AnalysisCompleted", handler);
+        logger.LogTrace("Subscribed to AnalysisCompleted events");
+    }
+
+    /// <summary>
+    /// Subscribe to analysis skipped events
+    /// </summary>
+    public void OnAnalysisSkipped(Func<Guid, string, DateTime, Task> handler)
+    {
+        hubConnection.On<Guid, string, DateTime>("AnalysisSkipped", handler);
+        logger.LogTrace("Subscribed to AnalysisSkipped events");
+    }
+
+    /// <summary>
+    /// Subscribe to analysis failed events
+    /// </summary>
+    public void OnAnalysisFailed(Func<Guid, string, DateTime, Task> handler)
+    {
+        hubConnection.On<Guid, string, DateTime>("AnalysisFailed", handler);
+        logger.LogTrace("Subscribed to AnalysisFailed events");
+    }
+
     private Task OnReconnecting(Exception? exception)
     {
         logger.LogWarning(exception, "SignalR connection lost, attempting to reconnect...");

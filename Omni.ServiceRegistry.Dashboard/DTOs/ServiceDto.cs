@@ -14,6 +14,7 @@ public class ServiceDto
     public string Description { get; set; } = string.Empty;
     public string ContactEmail { get; set; } = string.Empty;
     public List<string> Endpoints { get; set; } = new();
+    public List<ApiEndpoint>? ApiEndpoints { get; set; }
     public string HealthStatus { get; set; } = string.Empty;
     public DateTime? LastHeartbeatTimestamp { get; set; }
     public int HeartbeatTimeout { get; set; }

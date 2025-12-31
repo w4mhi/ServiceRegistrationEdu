@@ -1,19 +1,81 @@
 @page "/"
 @rendermode InteractiveServer
 @inject ServiceRegistryApiClient ApiClient
+@inject HealthInsightsApiClient InsightsClient
+@inject CooldownTimerService CooldownTimer
 @inject SignalRHubClient HubClient
 @inject NavigationManager Navigation
 @implements IAsyncDisposable
+@using Microsoft.AspNetCore.Components.Web
 @using Omni.ServiceRegistry.Dashboard.DTOs
+@using Omni.ServiceRegistry.Models
+@using System.Text.Json
 
 <PageTitle>Service Registry - Monitoring Dashboard</PageTitle>
 
-<div class="page-header-modern">
+<!-- AI Analysis Status Panel -->
+@if (isAnalyzing)
+{
+    <div class="position-fixed" style="top: 0; left: 0; right: 0; z-index: 9998; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+        <div class="container-fluid">
+            <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div>
+                        <div style="font-weight: 700; font-size: 1.1rem;">🧠 AI Analysis in Progress</div>
+                        <div style="font-size: 0.9rem; opacity: 0.9;">@analysisStatus</div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    @if (analysisProgress > 0)
+                    {
+                        <div style="min-width: 200px;">
+                            <div class="progress" style="height: 8px; background: rgba(255,255,255,0.2);">
+                                <div class="progress-bar" role="progressbar" style="width: @(analysisProgress)%; background: white; transition: width 0.3s ease;" aria-valuenow="@analysisProgress" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <div style="font-size: 0.75rem; margin-top: 0.25rem; text-align: right;">@analysisProgress%</div>
+                        </div>
+                    }
+                    <div style="background: rgba(255,255,255,0.2); padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600;">
+                        @elapsedTime
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(analysisMessage) && !isAnalyzing)
+{
+    <div class="alert alert-@analysisMessageType alert-dismissible fade show position-fixed" role="alert" style="top: 1rem; right: 1rem; z-index: 9999; min-width: 300px; max-width: 500px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+        <strong>@analysisMessage</strong>
+        <button type="button" class="btn-close" @onclick="@(() => analysisMessage = null)"></button>
+    </div>
+}
+
+<div class="page-header-modern" style="@(isAnalyzing ? "margin-top: 80px;" : "")">
     <h1 class="page-title-modern">📊 Service Registry Dashboard</h1>
-    <button class="btn-refresh-top" @onclick="RefreshServices">
-        <i class="bi bi-arrow-clockwise"></i>
-        <span>Refresh</span>
-    </button>
+    <div style="display: flex; gap: 1rem;">
+        <button class="btn btn-ai-analysis" 
+                @onclick="TriggerGlobalAnalysis" 
+                disabled="@(CooldownTimer.IsOnCooldown || isAnalyzing)">
+            @if (isAnalyzing)
+            {
+                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                <span>Analyzing...</span>
+            }
+            else
+            {
+                <span>🧠 AI Analysis @(CooldownTimer.IsOnCooldown ? $"({CooldownTimer.RemainingSeconds}s)" : "")</span>
+            }
+        </button>
+        <button class="btn-refresh-top" @onclick="RefreshServices">
+            <i class="bi bi-arrow-clockwise"></i>
+            <span>Refresh</span>
+        </button>
+    </div>
 </div>
 
 <!-- Health Overview Cards -->
@@ -115,6 +177,7 @@
                             <th>Health Status</th>
                             <th>Missed Heartbeats</th>
                             <th>Last Seen</th>
+                            <th class="text-center">APIs</th>
                             <th class="text-center">Actions</th>
                         </tr>
                     </thead>
@@ -188,6 +251,31 @@
                                     }
                                 </td>
                                 <td class="text-center">
+                                    @{
+                                        List<ApiEndpoint> apiEndpoints = GetApiEndpoints(service);
+                                    }
+                                    @if (apiEndpoints.Count > 0)
+                                    {
+                                        <button class="btn btn-sm" 
+                                                style="background: @(showApiModal && selectedServiceId == service.ServiceId ? "#f97316" : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"); color: white; border: none; font-size: 0.9rem; padding: 0.4rem 0.8rem; transition: all 0.3s ease;"
+                                                @onclick="@(() => ShowApiEndpoints(service.ServiceId, service.ServiceName, apiEndpoints))"
+                                                title="Click to view API endpoints">
+                                            <i class="bi bi-code-slash me-1"></i>@apiEndpoints.Count APIs
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span style="color: #cbd5e1; font-weight: 500;">—</span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn btn-ai-analysis btn-ai-analysis-small" 
+                                            style="margin-right: 0.5rem;" 
+                                            @onclick="() => TriggerServiceAnalysis(service.ServiceId)"
+                                            disabled="@(CooldownTimer.IsOnCooldown || isAnalyzing)"
+                                            title="Trigger AI Health Analysis">
+                                        🤖
+                                    </button>
                                     <button class="btn-details-modern" style="margin-right: 0.75rem;" @onclick="() => ViewDetails(service.ServiceId)">
                                         <i class="bi bi-info-circle me-1"></i>Details
                                     </button>
@@ -211,12 +299,85 @@
     </div>
 </div>
 
+<!-- API Endpoints Modal -->
+@if (showApiModal)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content" style="border-radius: 1rem; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);">
+                <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-top-left-radius: 1rem; border-top-right-radius: 1rem;">
+                    <h5 class="modal-title"><i class="bi bi-code-slash me-2"></i>API Endpoints - @selectedServiceName</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseApiModal"></button>
+                </div>
+                <div class="modal-body" style="padding: 2rem;">
+                    @if (selectedApiEndpoints != null && selectedApiEndpoints.Count > 0)
+                    {
+                        <div class="mb-3">
+                            <span class="badge" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-size: 1rem; padding: 0.5rem 1rem;">
+                                @selectedApiEndpoints.Count Total Endpoints
+                            </span>
+                        </div>
+                        
+                        @foreach (var endpoint in selectedApiEndpoints)
+                        {
+                            <div class="mb-3 p-3" style="background: #f8fafc; border-left: 4px solid #667eea; border-radius: 0.5rem;">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <span class="badge" style="background: @GetMethodColor(endpoint.Method); color: white; font-weight: 700; min-width: 70px; text-align: center;">
+                                            @endpoint.Method
+                                        </span>
+                                        <code style="background: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem; margin-left: 0.5rem; font-size: 0.9rem;">
+                                            @endpoint.Path
+                                        </code>
+                                    </div>
+                                </div>
+                                @if (!string.IsNullOrEmpty(endpoint.Description))
+                                {
+                                    <div style="color: #64748b; font-size: 0.9rem; margin-top: 0.5rem;">
+                                        @endpoint.Description
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p style="color: #64748b; text-align: center;">No API endpoints available</p>
+                    }
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid #e2e8f0; padding: 1.5rem;">
+                    <button type="button" class="btn" 
+                            style="background: #6b7280; color: white; padding: 0.5rem 1.5rem; border-radius: 0.5rem; font-weight: 600; border: none; transition: all 0.2s ease;"
+                            onmouseover="this.style.background='#4b5563'"
+                            onmouseout="this.style.background='#6b7280'"
+                            @onclick="CloseApiModal">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
 @code {
     private List<Service>? services;
     private List<Service> filteredServices = new();
     private Dictionary<Guid, RecentlyRestoredServiceDto> recentlyRestoredMap = new();
     private string statusFilter = "";
     private System.Threading.Timer? refreshTimer;
+    private bool isAnalyzing = false;
+    private string? analysisMessage = null;
+    private string? analysisMessageType = null;
+    private string analysisStatus = "Initializing...";
+    private int analysisProgress = 0;
+    private string elapsedTime = "0s";
+    private DateTime analysisStartTime;
+    private System.Threading.Timer? analysisTimer;
+    private bool showApiModal = false;
+    private Guid selectedServiceId;
+    private string selectedServiceName = "";
+    private List<ApiEndpoint>? selectedApiEndpoints;
 
     protected override async Task OnInitializedAsync()
     {
@@ -250,6 +411,39 @@
             });
         });
         
+        // Subscribe to AI analysis events
+        HubClient.OnAnalysisStarted(async (serviceId, startedAt) =>
+        {
+            await InvokeAsync(() =>
+            {
+                isAnalyzing = true;
+                StateHasChanged();
+                return Task.CompletedTask;
+            });
+        });
+        
+        HubClient.OnAnalysisCompleted(async (serviceId, insightId, completedAt) =>
+        {
+            await InvokeAsync(async () =>
+            {
+                isAnalyzing = false;
+                StateHasChanged();
+            });
+        });
+        
+        HubClient.OnAnalysisFailed(async (serviceId, error, failedAt) =>
+        {
+            await InvokeAsync(() =>
+            {
+                isAnalyzing = false;
+                StateHasChanged();
+                return Task.CompletedTask;
+            });
+        });
+        
+        // Subscribe to cooldown timer
+        CooldownTimer.OnCooldownChanged += OnCooldownUpdate;
+        
         await HubClient.StartAsync();
         
         refreshTimer = new System.Threading.Timer(async _ =>
@@ -264,6 +458,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        CooldownTimer.OnCooldownChanged -= OnCooldownUpdate;
         refreshTimer?.Dispose();
         await HubClient.StopAsync();
     }
@@ -423,4 +618,189 @@
             return "warning";
         return "danger";
     }
+
+    // AI Analysis Methods
+    private async Task TriggerGlobalAnalysis()
+    {
+        if (CooldownTimer.IsOnCooldown || isAnalyzing)
+            return;
+
+        isAnalyzing = true;
+        analysisMessage = null;
+        analysisStartTime = DateTime.UtcNow;
+        analysisProgress = 0;
+        elapsedTime = "0s";
+        
+        // Start timer to update elapsed time
+        analysisTimer = new System.Threading.Timer(_ => 
+        {
+            TimeSpan elapsed = DateTime.UtcNow - analysisStartTime;
+            elapsedTime = elapsed.TotalSeconds < 60 
+                ? $"{elapsed.Seconds}s" 
+                : $"{elapsed.Minutes}m {elapsed.Seconds}s";
+            InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(500));
+        
+        StateHasChanged();
+
+        try
+        {
+            // Stage 1: Queueing analysis
+            analysisStatus = "📋 Queueing analysis request...";
+            analysisProgress = 10;
+            StateHasChanged();
+            await Task.Delay(300);
+            
+            AnalysisResponseDto? response = await InsightsClient.TriggerGlobalAnalysisAsync();
+            
+            if (response != null && response.Status == "Queued")
+            {
+                CooldownTimer.StartCooldown();
+                
+                // Stage 2: Analysis queued
+                analysisStatus = $"✅ Analysis queued! Processing {response.Message}";
+                analysisProgress = 20;
+                StateHasChanged();
+                await Task.Delay(500);
+                
+                // Stage 3: Ollama loading model
+                analysisStatus = "🔄 Ollama loading AI model (phi4)...";
+                analysisProgress = 30;
+                StateHasChanged();
+                await Task.Delay(1500);
+                
+                // Stage 4: Analyzing services
+                analysisStatus = "🔍 Analyzing service health patterns...";
+                analysisProgress = 50;
+                StateHasChanged();
+                await Task.Delay(2000);
+                
+                // Stage 5: Generating insights
+                analysisStatus = "💡 Generating AI insights and recommendations...";
+                analysisProgress = 75;
+                StateHasChanged();
+                await Task.Delay(2000);
+                
+                // Stage 6: Completing
+                analysisStatus = "✨ Finalizing analysis results...";
+                analysisProgress = 95;
+                StateHasChanged();
+                await Task.Delay(1000);
+                
+                // Stage 7: Done - show success message but don't auto-redirect
+                analysisProgress = 100;
+                analysisStatus = "🎉 Analysis complete! Check the Insights page.";
+                analysisMessage = $"✅ Analysis complete! {response.Message} - Navigate to Insights to view results.";
+                analysisMessageType = "success";
+                StateHasChanged();
+                await Task.Delay(3000);
+                
+                // Clear the message after 3 seconds
+                analysisMessage = null;
+            }
+            else
+            {
+                analysisMessage = "⚠️ Analysis request failed. Please try again.";
+                analysisMessageType = "warning";
+                StateHasChanged();
+                await Task.Delay(3000);
+                analysisMessage = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            analysisMessage = $"❌ Error: {ex.Message}";
+            analysisMessageType = "danger";
+            StateHasChanged();
+            await Task.Delay(3000);
+            analysisMessage = null;
+        }
+        finally
+        {
+            analysisTimer?.Dispose();
+            analysisTimer = null;
+            isAnalyzing = false;
+            analysisProgress = 0;
+            StateHasChanged();
+        }
+    }
+
+    private async Task TriggerServiceAnalysis(Guid serviceId)
+    {
+        if (CooldownTimer.IsOnCooldown || isAnalyzing)
+            return;
+
+        isAnalyzing = true;
+        StateHasChanged();
+
+        try
+        {
+            AnalysisResponseDto? response = await InsightsClient.TriggerAnalysisAsync(new List<Guid> { serviceId });
+            if (response != null)
+            {
+                CooldownTimer.StartCooldown();
+            }
+        }
+        finally
+        {
+            isAnalyzing = false;
+            StateHasChanged();
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        CooldownTimer.OnCooldownChanged += OnCooldownUpdate;
+    }
+
+    private void OnCooldownUpdate()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private List<ApiEndpoint> GetApiEndpoints(Service service)
+    {
+        if (string.IsNullOrEmpty(service.ApiEndpoints))
+            return new List<ApiEndpoint>();
+        
+        try
+        {
+            return JsonSerializer.Deserialize<List<ApiEndpoint>>(service.ApiEndpoints) ?? new List<ApiEndpoint>();
+        }
+        catch
+        {
+            return new List<ApiEndpoint>();
+        }
+    }
+    
+    private void ShowApiEndpoints(Guid serviceId, string serviceName, List<ApiEndpoint> endpoints)
+    {
+        selectedServiceId = serviceId;
+        selectedServiceName = serviceName;
+        selectedApiEndpoints = endpoints;
+        showApiModal = true;
+        StateHasChanged();
+    }
+    
+    private void CloseApiModal()
+    {
+        showApiModal = false;
+        selectedServiceId = Guid.Empty;
+        selectedApiEndpoints = null;
+        StateHasChanged();
+    }
+    
+    private string GetMethodColor(string method)
+    {
+        return method.ToUpper() switch
+        {
+            "GET" => "#10b981",      // Green
+            "POST" => "#3b82f6",     // Blue
+            "PUT" => "#f59e0b",      // Orange
+            "PATCH" => "#8b5cf6",    // Purple
+            "DELETE" => "#ef4444",   // Red
+            _ => "#6b7280"           // Gray
+        };
+    }
 }
+

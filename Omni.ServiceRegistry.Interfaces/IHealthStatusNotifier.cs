@@ -58,4 +58,31 @@ public interface IHealthStatusNotifier
     /// <param name="registrationId">The registration ID</param>
     /// <param name="logger">Optional logger</param>
     Task NotifyRegistrationDeniedAsync(Guid registrationId, ILogger? logger = null);
+    
+    /// <summary>
+    /// Notify all connected clients that analysis has started for a service
+    /// </summary>
+    /// <param name="serviceId">The service ID</param>
+    Task NotifyAnalysisStartedAsync(Guid serviceId);
+    
+    /// <summary>
+    /// Notify all connected clients that analysis has completed for a service
+    /// </summary>
+    /// <param name="serviceId">The service ID</param>
+    /// <param name="insightId">The generated insight ID</param>
+    Task NotifyAnalysisCompletedAsync(Guid serviceId, Guid insightId);
+    
+    /// <summary>
+    /// Notify all connected clients that analysis was skipped for a service
+    /// </summary>
+    /// <param name="serviceId">The service ID</param>
+    /// <param name="reason">Reason for skipping</param>
+    Task NotifyAnalysisSkippedAsync(Guid serviceId, string reason);
+    
+    /// <summary>
+    /// Notify all connected clients that analysis failed for a service
+    /// </summary>
+    /// <param name="serviceId">The service ID</param>
+    /// <param name="errorMessage">Error message</param>
+    Task NotifyAnalysisFailedAsync(Guid serviceId, string errorMessage);
 }

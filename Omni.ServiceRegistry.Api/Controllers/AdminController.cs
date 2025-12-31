@@ -26,17 +26,20 @@ public class AdminController : ControllerBase
     private readonly IAdministratorService administratorService;
     private readonly IServiceCatalogService catalogService;
     private readonly IDeletionCycleRepository deletionCycleRepository;
+    private readonly IContractValidationService validationService;
     private readonly ILogger<AdminController> logger;
 
     public AdminController(
         IAdministratorService administratorService,
         IServiceCatalogService catalogService,
         IDeletionCycleRepository deletionCycleRepository,
+        IContractValidationService validationService,
         ILogger<AdminController> logger)
     {
         this.administratorService = administratorService;
         this.catalogService = catalogService;
         this.deletionCycleRepository = deletionCycleRepository;
+        this.validationService = validationService;
         this.logger = logger;
     }
 
@@ -96,6 +99,36 @@ public class AdminController : ControllerBase
     }
 
     /// <summary>
+    /// Validate a registration request by checking endpoints
+    /// </summary>
+    [HttpPost("registrations/{id}/validate")]
+    [ProducesResponseType(typeof(ContractValidationResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ContractValidationResult>> ValidateRegistration(Guid id)
+    {
+        try
+        {
+            ContractValidationResult result = await validationService.ValidateServiceAsync(id);
+            
+            logger.LogInformation(
+                "Registration {RegistrationId} validated: {Status} - {Summary}",
+                id, result.Status, result.Summary);
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error validating registration {RegistrationId}", id);
+            return NotFound(new ProblemDetails
+            {
+                Status = StatusCodes.Status404NotFound,
+                Title = "Validation Failed",
+                Detail = ex.Message
+            });
+        }
+    }
+
+    /// <summary>
     /// Approve a registration request (R11-R12)
     /// </summary>
     [HttpPost("registrations/{id}/approve")]
@@ -110,6 +143,29 @@ public class AdminController : ControllerBase
         
         try
         {
+            // Validate service before approval
+            logger.LogInformation("Validating registration {RegistrationId} before approval", id);
+            ContractValidationResult validationResult = await validationService.ValidateServiceAsync(id);
+            
+            if (validationResult.Status != ValidationStatus.Passed)
+            {
+                logger.LogWarning(
+                    "Registration {RegistrationId} failed validation: {Summary}",
+                    id, validationResult.Summary);
+                
+                return BadRequest(new ProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "Contract Requirements Not Met",
+                    Detail = $"⚠️ This service cannot be approved because it does not meet the contract requirements.\n\n" +
+                             $"Validation Result: {validationResult.Summary}\n\n" +
+                             $"Issues Found:\n• {string.Join("\n• ", validationResult.Failures)}\n\n" +
+                             $"Please ensure all service endpoints are reachable and properly configured before attempting approval."
+                });
+            }
+            
+            logger.LogInformation("Registration {RegistrationId} passed validation, proceeding with approval", id);
+            
             Service service = await administratorService.ApproveRegistrationAsync(
                 id, request.ApprovedBy, request.Comments);
 
@@ -169,44 +225,104 @@ public class AdminController : ControllerBase
             });
         }
         
-        List<Guid> successfulApprovals = new List<Guid>();
-        List<(Guid RegistrationId, string Error)> failures = new List<(Guid, string)>();
+        // First, validate all registrations to check if they meet requirements
+        List<(Guid RegistrationId, ValidationStatus Status, string? ErrorMessage)> validationResults = new();
+        List<RegistrationRequest> registrationsToApprove = new();
+        List<(Guid RegistrationId, string ServiceName, string Reason)> validationFailures = new();
         
         foreach (Guid registrationId in request.RegistrationIds)
+        {
+            RegistrationRequest? registration = await administratorService.GetRegistrationByIdAsync(registrationId);
+            if (registration == null)
+            {
+                validationResults.Add((registrationId, ValidationStatus.Failed, "Registration not found"));
+                validationFailures.Add((registrationId, "Unknown", "Registration not found"));
+                continue;
+            }
+            
+            // If not validated yet or validation failed, check again
+            if (registration.ValidationStatus != ValidationStatus.Passed)
+            {
+                ContractValidationResult validationResult = await validationService.ValidateServiceAsync(registrationId);
+                validationResults.Add((registrationId, validationResult.Status, validationResult.Summary));
+                
+                if (validationResult.Status != ValidationStatus.Passed)
+                {
+                    logger.LogWarning(
+                        "Registration {RegistrationId} failed validation in bulk approval: {Summary}",
+                        registrationId, validationResult.Summary);
+                    validationFailures.Add((registrationId, registration.ServiceName, validationResult.Summary));
+                }
+                else
+                {
+                    registrationsToApprove.Add(registration);
+                }
+            }
+            else
+            {
+                validationResults.Add((registrationId, ValidationStatus.Passed, null));
+                registrationsToApprove.Add(registration);
+            }
+        }
+        
+        // Proceed to approve services that passed validation
+        List<Guid> successfulApprovals = new List<Guid>();
+        List<(Guid RegistrationId, string Error)> approvalFailures = new List<(Guid, string)>();
+        
+        foreach (RegistrationRequest registration in registrationsToApprove)
         {
             try
             {
                 Service service = await administratorService.ApproveRegistrationAsync(
-                    registrationId, request.ApprovedBy, request.Comments);
+                    registration.RegistrationId, request.ApprovedBy, request.Comments);
                 
-                successfulApprovals.Add(registrationId);
+                successfulApprovals.Add(registration.RegistrationId);
                 
                 logger.LogInformation(
                     "Registration {RegistrationId} approved (bulk), service {ServiceId} created",
-                    registrationId, service.ServiceId);
+                    registration.RegistrationId, service.ServiceId);
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to approve registration {RegistrationId} in bulk operation", registrationId);
-                failures.Add((registrationId, ex.Message));
+                logger.LogWarning(ex, "Failed to approve registration {RegistrationId} in bulk operation", registration.RegistrationId);
+                approvalFailures.Add((registration.RegistrationId, ex.Message));
             }
         }
         
         logger.LogInformation(
-            "Bulk approval completed: {SuccessCount} successful, {FailureCount} failed",
-            successfulApprovals.Count, failures.Count);
+            "Bulk approval completed: {SuccessCount} approved, {ValidationFailedCount} failed validation, {ApprovalFailedCount} approval errors",
+            successfulApprovals.Count, validationFailures.Count, approvalFailures.Count);
+        
+        // Build response with all information
+        List<BulkApprovalFailureDto> allFailures = new();
+        
+        // Add validation failures
+        foreach ((Guid regId, string serviceName, string reason) in validationFailures)
+        {
+            allFailures.Add(new BulkApprovalFailureDto
+            {
+                RegistrationId = regId,
+                ErrorMessage = $"❌ Contract validation failed for '{serviceName}': {reason}"
+            });
+        }
+        
+        // Add approval failures
+        foreach ((Guid regId, string error) in approvalFailures)
+        {
+            allFailures.Add(new BulkApprovalFailureDto
+            {
+                RegistrationId = regId,
+                ErrorMessage = error
+            });
+        }
         
         return Ok(new BulkApprovalResponseDto
         {
             SuccessfulApprovals = successfulApprovals,
-            Failures = failures.Select(f => new BulkApprovalFailureDto
-            {
-                RegistrationId = f.RegistrationId,
-                ErrorMessage = f.Error
-            }).ToList(),
+            Failures = allFailures.ToList(),
             TotalProcessed = request.RegistrationIds.Count,
             SuccessCount = successfulApprovals.Count,
-            FailureCount = failures.Count
+            FailureCount = allFailures.Count
         });
     }
     

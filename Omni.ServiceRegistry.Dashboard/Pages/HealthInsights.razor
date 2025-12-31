@@ -1,0 +1,241 @@
+@page "/insights"
+@using Microsoft.AspNetCore.Components.Web
+@using Omni.ServiceRegistry.Dashboard.DTOs
+@using Omni.ServiceRegistry.Dashboard.Services
+@inject HealthInsightsApiClient InsightsClient
+@inject ILogger<HealthInsights> Logger
+
+<PageTitle>Health Insights</PageTitle>
+
+<div class="insights-container">
+    <div class="page-header">
+        <h1>🧠 AI Health Insights</h1>
+        <p class="text-muted">LLM-powered analysis of service health patterns and anomalies</p>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-container">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading insights...</span>
+            </div>
+            <p class="mt-3">Loading recent insights...</p>
+        </div>
+    }
+    else if (insights.Count == 0)
+    {
+        <div class="alert alert-info">
+            <h5>📊 No insights available yet</h5>
+            <p class="mb-0">
+                Trigger analysis from the monitoring dashboard to generate AI-powered health insights.
+                The system will analyze service health patterns, correlations, and historical data.
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="insights-stats mb-4">
+            <div class="stat-card">
+                <div class="stat-value">@insights.Count</div>
+                <div class="stat-label">Total Insights</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">@insights.Count(i => i.AnalysisStatus == "Completed")</div>
+                <div class="stat-label">Completed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">@insights.Count(i => i.AnalysisStatus == "Failed")</div>
+                <div class="stat-label">Failed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">@avgTokens</div>
+                <div class="stat-label">Avg Tokens</div>
+            </div>
+        </div>
+
+        <div class="insights-list">
+            @foreach (HealthInsightDto insight in insights.OrderByDescending(i => i.GeneratedAt))
+            {
+                <div class="insight-card @GetInsightSeverityClass(insight)">                
+                    <div class="insight-header">
+                        <div class="insight-title">
+                            <h5>@insight.ServiceName</h5>
+                            <span class="badge @GetTriggerBadgeClass(insight.TriggerType)">
+                                @insight.TriggerType
+                            </span>
+                            <span class="badge @GetStatusBadgeClass(insight.AnalysisStatus)">
+                                @insight.AnalysisStatus
+                            </span>
+                        </div>
+                        <div class="insight-meta">
+                            <small class="text-muted">
+                                @insight.GeneratedAt.ToString("MMM dd, yyyy HH:mm:ss") UTC
+                                · @insight.LlmModel · @insight.TokensUsed tokens · @insight.ProcessingTimeMs ms
+                            </small>
+                        </div>
+                    </div>
+
+                    @if (insight.AnalysisStatus == "Completed")
+                    {
+                        <div class="insight-body">
+                            <div class="insight-section">
+                                <h6>📋 Summary</h6>
+                                <p>@insight.Summary</p>
+                            </div>
+
+                            @if (insight.RootCauses.Count > 0)
+                            {
+                                <div class="insight-section">
+                                    <h6>🔍 Root Causes</h6>
+                                    <ul>
+                                        @foreach (string cause in insight.RootCauses)
+                                        {
+                                            <li>@cause</li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+
+                            @if (insight.CorrelatedServices.Count > 0)
+                            {
+                                <div class="insight-section">
+                                    <h6>🔗 Correlated Services</h6>
+                                    <ul>
+                                        @foreach (CorrelatedServiceDto correlated in insight.CorrelatedServices)
+                                        {
+                                            <li><strong>@correlated.Service:</strong> @correlated.Impact</li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(insight.HistoricalContext))
+                            {
+                                <div class="insight-section">
+                                    <h6>📊 Historical Context</h6>
+                                    <p>@insight.HistoricalContext</p>
+                                </div>
+                            }
+
+                            @if (insight.RecommendedActions.Count > 0)
+                            {
+                                <div class="insight-section">
+                                    <h6>💡 Recommended Actions</h6>
+                                    <ul>
+                                        @foreach (string action in insight.RecommendedActions)
+                                        {
+                                            <li>@action</li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (insight.AnalysisStatus == "Failed")
+                    {
+                        <div class="alert alert-danger mb-0">
+                            <strong>Error:</strong> @insight.ErrorMessage
+                        </div>
+                    }
+
+                    <div class="insight-footer">
+                        <small class="text-muted">
+                            Triggered by: @insight.TriggeredBy
+                        </small>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<HealthInsightDto> insights = new();
+    private bool isLoading = true;
+    private int avgTokens = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInsightsAsync();
+    }
+
+    private async Task LoadInsightsAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            insights = await InsightsClient.GetRecentInsightsAsync(50);
+            
+            if (insights.Count > 0)
+            {
+                avgTokens = (int)insights.Where(i => i.TokensUsed > 0).Average(i => i.TokensUsed);
+            }
+
+            Logger.LogInformation("Loaded {Count} insights", insights.Count);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load insights");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetInsightSeverityClass(HealthInsightDto insight)
+    {
+        if (insight.AnalysisStatus != "Completed")
+        {
+            return insight.AnalysisStatus switch
+            {
+                "Failed" => "insight-failed",
+                "Processing" => "insight-processing",
+                _ => ""
+            };
+        }
+
+        // Completed insights: determine severity by content
+        if (insight.RecommendedActions.Count > 0)
+        {
+            return "insight-warning"; // Yellow/orange for actionable issues
+        }
+
+        return "insight-completed"; // Green for informational only
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "Completed" => "insight-completed",
+            "Failed" => "insight-failed",
+            "Processing" => "insight-processing",
+            _ => ""
+        };
+    }
+
+    private string GetStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Completed" => "bg-success",
+            "Failed" => "bg-danger",
+            "Processing" => "bg-warning",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetTriggerBadgeClass(string triggerType)
+    {
+        return triggerType switch
+        {
+            "Manual" => "bg-primary",
+            "Automatic" => "bg-info",
+            _ => "bg-secondary"
+        };
+    }
+}

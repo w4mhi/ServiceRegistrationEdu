@@ -22,11 +22,47 @@ namespace Omni.ServiceRegistry.Data.Postgres.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Omni.ServiceRegistry.Models.AnalysisTriggerLog", b =>
+                {
+                    b.Property<Guid>("LogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RequestType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ServiceIds")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("TriggeredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TriggeredBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.HasKey("LogId");
+
+                    b.HasIndex("TriggeredAt");
+
+                    b.HasIndex("TriggeredBy");
+
+                    b.HasIndex("TriggeredBy", "TriggeredAt");
+
+                    b.ToTable("AnalysisTriggerLogs");
+                });
+
             modelBuilder.Entity("Omni.ServiceRegistry.Models.RegistrationRequest", b =>
                 {
                     b.Property<Guid>("RegistrationId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ApiEndpoints")
+                        .HasColumnType("text");
 
                     b.Property<string>("ContactEmail")
                         .IsRequired()
@@ -46,6 +82,9 @@ namespace Omni.ServiceRegistry.Data.Postgres.Migrations
 
                     b.Property<int>("HeartbeatTimeout")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("LastValidatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("MaxMissedHeartbeats")
                         .HasColumnType("integer");
@@ -78,6 +117,12 @@ namespace Omni.ServiceRegistry.Data.Postgres.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ValidationResults")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ValidationStatus")
+                        .HasColumnType("integer");
+
                     b.HasKey("RegistrationId");
 
                     b.HasIndex("ServiceNameNormalized")
@@ -94,6 +139,9 @@ namespace Omni.ServiceRegistry.Data.Postgres.Migrations
                     b.Property<Guid>("ServiceId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ApiEndpoints")
+                        .HasColumnType("text");
 
                     b.Property<int>("ConsecutiveHealthyHeartbeats")
                         .HasColumnType("integer");
@@ -310,6 +358,84 @@ namespace Omni.ServiceRegistry.Data.Postgres.Migrations
                     b.ToTable("ServiceDeletionCycles");
                 });
 
+            modelBuilder.Entity("Omni.ServiceRegistry.Models.ServiceHealthInsight", b =>
+                {
+                    b.Property<Guid>("InsightId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AnalysisStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ContextData")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("CorrelatedServices")
+                        .HasMaxLength(3000)
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("GeneratedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HistoricalContext")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("LlmModel")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("ProcessingTimeMs")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RecommendedActions")
+                        .HasMaxLength(3000)
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("RootCauses")
+                        .HasMaxLength(5000)
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("ServiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("TokensUsed")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TriggerType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("TriggeredBy")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.HasKey("InsightId");
+
+                    b.HasIndex("AnalysisStatus");
+
+                    b.HasIndex("GeneratedAt");
+
+                    b.HasIndex("ServiceId");
+
+                    b.HasIndex("ServiceId", "GeneratedAt");
+
+                    b.ToTable("ServiceHealthInsights");
+                });
+
             modelBuilder.Entity("Omni.ServiceRegistry.Models.ServiceDeletionCycle", b =>
                 {
                     b.HasOne("Omni.ServiceRegistry.Models.Service", "Service")
@@ -321,9 +447,22 @@ namespace Omni.ServiceRegistry.Data.Postgres.Migrations
                     b.Navigation("Service");
                 });
 
+            modelBuilder.Entity("Omni.ServiceRegistry.Models.ServiceHealthInsight", b =>
+                {
+                    b.HasOne("Omni.ServiceRegistry.Models.Service", "Service")
+                        .WithMany("HealthInsights")
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Service");
+                });
+
             modelBuilder.Entity("Omni.ServiceRegistry.Models.Service", b =>
                 {
                     b.Navigation("DeletionHistory");
+
+                    b.Navigation("HealthInsights");
                 });
 #pragma warning restore 612, 618
         }

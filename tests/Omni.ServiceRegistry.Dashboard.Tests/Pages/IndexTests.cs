@@ -3,6 +3,8 @@ using System.Net.Http;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -44,8 +46,13 @@ public class IndexTests : TestContext
         {
             BaseAddress = new Uri("http://localhost:5001")
         };
+        JsonSerializerOptions jsonOptions = new()
+        {
+            PropertyNameCaseInsensitive = true,
+            Converters = { new JsonStringEnumConverter() }
+        };
         Mock<ILogger<ServiceRegistryApiClient>> apiLogger = new Mock<ILogger<ServiceRegistryApiClient>>();
-        ServiceRegistryApiClient apiClient = new ServiceRegistryApiClient(httpClient, apiLogger.Object);
+        ServiceRegistryApiClient apiClient = new ServiceRegistryApiClient(httpClient, jsonOptions, apiLogger.Object);
         Services.AddSingleton(apiClient);
     }
 

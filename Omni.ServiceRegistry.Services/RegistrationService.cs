@@ -40,6 +40,7 @@ public class RegistrationService : IRegistrationService
         string description,
         string contactEmail,
         string endpointsJson,
+        string? apiEndpointsJson,
         int heartbeatTimeout,
         int maxMissedHeartbeats)
     {
@@ -101,6 +102,7 @@ public class RegistrationService : IRegistrationService
             Description = description,
             ContactEmail = contactEmail,
             Endpoints = endpointsJson,
+            ApiEndpoints = apiEndpointsJson,
             HeartbeatTimeout = heartbeatTimeout,
             MaxMissedHeartbeats = maxMissedHeartbeats,
             Status = RegistrationStatus.Pending,

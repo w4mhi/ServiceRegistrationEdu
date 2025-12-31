@@ -42,6 +42,11 @@ public class RegistrationRequest
     public string Endpoints { get; set; } = "[]";
     
     /// <summary>
+    /// JSON array of API endpoints exposed by the service
+    /// </summary>
+    public string? ApiEndpoints { get; set; }
+    
+    /// <summary>
     /// Heartbeat timeout in seconds (R33)
     /// </summary>
     public int HeartbeatTimeout { get; set; }
@@ -55,6 +60,21 @@ public class RegistrationRequest
     /// Current registration status
     /// </summary>
     public RegistrationStatus Status { get; set; } = RegistrationStatus.Pending;
+    
+    /// <summary>
+    /// Contract validation status
+    /// </summary>
+    public ValidationStatus ValidationStatus { get; set; } = ValidationStatus.NotValidated;
+    
+    /// <summary>
+    /// JSON serialized validation results
+    /// </summary>
+    public string? ValidationResults { get; set; }
+    
+    /// <summary>
+    /// Timestamp when validation was last performed
+    /// </summary>
+    public DateTime? LastValidatedAt { get; set; }
     
     /// <summary>
     /// Timestamp when registration was submitted

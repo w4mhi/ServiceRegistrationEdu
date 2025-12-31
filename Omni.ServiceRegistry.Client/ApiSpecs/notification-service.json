@@ -1,0 +1,71 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Notification Service API",
+    "version": "1.0.0",
+    "description": "Sends notifications via email, SMS, and push notifications"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "summary": "Health check endpoint",
+        "description": "Returns service health status",
+        "tags": ["Health"],
+        "responses": {
+          "200": { "description": "Service is healthy" }
+        }
+      }
+    },
+    "/api/v1/notifications/email": {
+      "post": {
+        "summary": "Send email",
+        "description": "Sends an email notification",
+        "tags": ["Email"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Email sent successfully" }
+        }
+      }
+    },
+    "/api/v1/notifications/sms": {
+      "post": {
+        "summary": "Send SMS",
+        "description": "Sends an SMS notification",
+        "tags": ["SMS"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "SMS sent successfully" }
+        }
+      }
+    },
+    "/api/v1/notifications/push": {
+      "post": {
+        "summary": "Send push notification",
+        "description": "Sends a mobile push notification",
+        "tags": ["Push"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Push notification sent" }
+        }
+      }
+    },
+    "/api/v1/templates": {
+      "get": {
+        "summary": "List templates",
+        "description": "Retrieves available notification templates",
+        "tags": ["Templates"],
+        "responses": {
+          "200": { "description": "Template list retrieved" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

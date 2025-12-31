@@ -24,6 +24,11 @@ public interface IAdministratorService
     Task<List<RegistrationRequest>> GetAllRegistrationsAsync();
     
     /// <summary>
+    /// Get a registration request by ID
+    /// </summary>
+    Task<RegistrationRequest?> GetRegistrationByIdAsync(Guid registrationId);
+    
+    /// <summary>
     /// Approve a registration request (R11-R12)
     /// </summary>
     Task<Service> ApproveRegistrationAsync(Guid registrationId, string approvedBy, string? comments = null);

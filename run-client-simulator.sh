@@ -84,6 +84,36 @@ else
 fi
 echo ""
 
+# Check if mock services are running
+echo "Checking if mock service endpoints are running..."
+MOCK_RUNNING=false
+if curl -s -f "http://localhost:8001/health" > /dev/null 2>&1; then
+    MOCK_RUNNING=true
+    echo "✓ Mock services are already running"
+else
+    echo "⚠️  Mock services are not running. Starting mock endpoints..."
+    
+    # Start mock services in background
+    python3 mock-services.py > /dev/null 2>&1 &
+    MOCK_PID=$!
+    
+    # Wait for mock services to be ready (max 5 seconds)
+    echo "Waiting for mock services to start..."
+    for i in {1..5}; do
+        if curl -s -f "http://localhost:8001/health" > /dev/null 2>&1; then
+            echo "✓ Mock services are now running (PID: $MOCK_PID)"
+            MOCK_RUNNING=true
+            break
+        fi
+        if [ $i -eq 5 ]; then
+            echo "⚠️  Warning: Mock services may not have started properly"
+            echo "   Validation tests will show 'Connection refused' for service endpoints"
+        fi
+        sleep 1
+    done
+fi
+echo ""
+
 # Check if project exists
 if [ ! -f "$CLIENT_DIR/Omni.ServiceRegistry.Client.csproj" ]; then
     echo "❌ ERROR: Client project not found at $CLIENT_DIR"
@@ -101,14 +131,18 @@ echo "✓ Build successful"
 echo ""
 
 # Run the simulator
-echo "Starting simulator with 5 services..."
+echo "Starting simulator with 8 services (including 1 misconfigured)..."
 echo ""
+echo "Mock HTTP endpoints running on ports 8001-8007"
 echo "Services to be simulated:"
-echo "  1. payment-service     - AlwaysHealthy (never misses)"
-echo "  2. inventory-service   - OccasionalMisses (misses every 5th)"
-echo "  3. notification-service - FrequentMisses (misses every 3rd)"
-echo "  4. analytics-service   - DeadThenRecover (full cycle)"
-echo "  5. reporting-service   - Chaotic (random 70% success)"
+echo "  1. payment-service          - http://localhost:8001"
+echo "  2. inventory-service        - http://localhost:8002"
+echo "  3. notification-service     - http://localhost:8003"
+echo "  4. analytics-service        - http://localhost:8004"
+echo "  5. reporting-service        - http://localhost:8005"
+echo "  6. auth-service             - http://localhost:8006"
+echo "  7. logging-service          - http://localhost:8007"
+echo "  8. misconfigured-service    - INVALID endpoints (for validation testing)"
 echo ""
 echo "Press Ctrl+C to stop all services"
 echo "-----------------------------------"

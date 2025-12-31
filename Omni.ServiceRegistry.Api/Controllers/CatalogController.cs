@@ -70,6 +70,9 @@ public class CatalogController : ControllerBase
             Description = s.Description,
             ContactEmail = s.ContactEmail,
             Endpoints = JsonSerializer.Deserialize<List<string>>(s.Endpoints) ?? new(),
+            ApiEndpoints = !string.IsNullOrEmpty(s.ApiEndpoints) 
+                ? JsonSerializer.Deserialize<List<ApiEndpoint>>(s.ApiEndpoints) 
+                : null,
             HealthStatus = s.HealthStatus.ToString(),
             LastHeartbeatTimestamp = s.LastHeartbeatTimestamp,
             HeartbeatTimeout = s.HeartbeatTimeout,

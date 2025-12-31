@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Omni.ServiceRegistry.Models;
 
 using System;
 using System.Collections.Generic;
@@ -34,6 +35,11 @@ public class RegistrationRequestDto
     /// JSON array of service endpoint URLs (1-10 URLs)
     /// </summary>
     public List<string> Endpoints { get; set; } = new();
+    
+    /// <summary>
+    /// API endpoints exposed by the service
+    /// </summary>
+    public List<ApiEndpoint>? ApiEndpoints { get; set; }
     
     /// <summary>
     /// Heartbeat timeout in seconds (recommended 15-300)

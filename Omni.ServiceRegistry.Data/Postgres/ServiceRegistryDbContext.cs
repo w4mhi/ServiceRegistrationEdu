@@ -23,6 +23,8 @@ public class ServiceRegistryDbContext : DbContext
     public DbSet<Service> Services => Set<Service>();
     public DbSet<ServiceChangeHistory> ServiceChangeHistory => Set<ServiceChangeHistory>();
     public DbSet<ServiceDeletionCycle> ServiceDeletionCycles => Set<ServiceDeletionCycle>();
+    public DbSet<ServiceHealthInsight> ServiceHealthInsights => Set<ServiceHealthInsight>();
+    public DbSet<AnalysisTriggerLog> AnalysisTriggerLogs => Set<AnalysisTriggerLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -160,6 +162,84 @@ public class ServiceRegistryDbContext : DbContext
             // Matching query filter to align with Service entity
             // This prevents the warning about mismatched query filters
             entity.HasQueryFilter(sdc => sdc.Service!.DeletionStatus != DeletionStatus.Deleted);
+        });
+        
+        // ServiceHealthInsight configuration
+        modelBuilder.Entity<ServiceHealthInsight>(entity =>
+        {
+            entity.HasKey(e => e.InsightId);
+            
+            entity.HasIndex(e => e.ServiceId);
+            entity.HasIndex(e => e.GeneratedAt);
+            entity.HasIndex(e => e.AnalysisStatus);
+            entity.HasIndex(e => new { e.ServiceId, e.GeneratedAt });
+            
+            entity.Property(e => e.TriggerType)
+                .IsRequired()
+                .HasMaxLength(20);
+            
+            entity.Property(e => e.TriggeredBy)
+                .HasMaxLength(255);
+            
+            entity.Property(e => e.Summary)
+                .IsRequired()
+                .HasMaxLength(2000);
+            
+            entity.Property(e => e.RootCauses)
+                .HasMaxLength(5000)
+                .HasColumnType("jsonb");
+            
+            entity.Property(e => e.CorrelatedServices)
+                .HasMaxLength(3000)
+                .HasColumnType("jsonb");
+            
+            entity.Property(e => e.HistoricalContext)
+                .HasMaxLength(2000);
+            
+            entity.Property(e => e.RecommendedActions)
+                .HasMaxLength(3000)
+                .HasColumnType("jsonb");
+            
+            entity.Property(e => e.LlmModel)
+                .IsRequired()
+                .HasMaxLength(50);
+            
+            entity.Property(e => e.AnalysisStatus)
+                .IsRequired()
+                .HasMaxLength(20);
+            
+            entity.Property(e => e.ErrorMessage)
+                .HasMaxLength(1000);
+            
+            entity.Property(e => e.ContextData)
+                .HasColumnType("jsonb");
+            
+            // Foreign key relationship
+            entity.HasOne(e => e.Service)
+                .WithMany(s => s.HealthInsights)
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        
+        // AnalysisTriggerLog configuration
+        modelBuilder.Entity<AnalysisTriggerLog>(entity =>
+        {
+            entity.HasKey(e => e.LogId);
+            
+            entity.HasIndex(e => e.TriggeredBy);
+            entity.HasIndex(e => e.TriggeredAt);
+            entity.HasIndex(e => new { e.TriggeredBy, e.TriggeredAt });
+            
+            entity.Property(e => e.TriggeredBy)
+                .IsRequired()
+                .HasMaxLength(255);
+            
+            entity.Property(e => e.RequestType)
+                .IsRequired()
+                .HasMaxLength(20);
+            
+            entity.Property(e => e.ServiceIds)
+                .HasColumnType("jsonb");
         });
     }
 }

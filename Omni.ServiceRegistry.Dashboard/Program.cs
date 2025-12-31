@@ -8,6 +8,9 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -24,12 +27,24 @@ builder.Logging.AddFile("/tmp/dashboard-{Date}.log", minimumLevel: LogLevel.Debu
 builder.Logging.AddFilter("Microsoft.AspNetCore.Components", LogLevel.Debug);
 builder.Logging.AddFilter("Microsoft.AspNetCore.SignalR", LogLevel.Debug);
 
+// Configure JSON options for enum string serialization
+JsonSerializerOptions jsonOptions = new()
+{
+    PropertyNameCaseInsensitive = true,
+    Converters = { new JsonStringEnumConverter() }
+};
+
 // Add services to the container
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 // Add SignalR for real-time updates
-builder.Services.AddSignalR();
+builder.Services.AddSignalR()
+    .AddJsonProtocol(options =>
+    {
+        options.PayloadSerializerOptions.PropertyNameCaseInsensitive = true;
+        options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 
 // Configure HTTP client to communicate with Service Registry API
 string apiBaseUrl = builder.Configuration["ServiceRegistry:ApiBaseUrl"]!;
@@ -38,6 +53,19 @@ builder.Services.AddHttpClient<ServiceRegistryApiClient>(client =>
     client.BaseAddress = new Uri(apiBaseUrl);
     client.Timeout = TimeSpan.FromSeconds(30);
 });
+
+// Configure HTTP client for Health Insights API
+builder.Services.AddHttpClient<HealthInsightsApiClient>(client =>
+{
+    client.BaseAddress = new Uri(apiBaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
+// Register JSON options as singleton for use in API clients
+builder.Services.AddSingleton(jsonOptions);
+
+// Register cooldown timer service as scoped
+builder.Services.AddScoped<CooldownTimerService>();
 
 // Configure SignalR hub client for receiving real-time updates from API
 string apiHubUrl = $"{apiBaseUrl}/hubs/servicemonitor";

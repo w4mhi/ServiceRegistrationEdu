@@ -47,6 +47,11 @@ public class Service
     public string Endpoints { get; set; } = "[]";
     
     /// <summary>
+    /// JSON array of API endpoints exposed by the service
+    /// </summary>
+    public string? ApiEndpoints { get; set; }
+    
+    /// <summary>
     /// Heartbeat timeout in seconds
     /// </summary>
     public int HeartbeatTimeout { get; set; }
@@ -145,6 +150,11 @@ public class Service
     /// Navigation property to deletion history cycles
     /// </summary>
     public ICollection<ServiceDeletionCycle> DeletionHistory { get; set; } = new List<ServiceDeletionCycle>();
+    
+    /// <summary>
+    /// Navigation property to AI-generated health insights
+    /// </summary>
+    public ICollection<ServiceHealthInsight> HealthInsights { get; set; } = new List<ServiceHealthInsight>();
     
     /// <summary>
     /// Optimistic concurrency token (EF Core)

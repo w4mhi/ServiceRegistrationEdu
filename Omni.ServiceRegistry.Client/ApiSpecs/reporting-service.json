@@ -1,0 +1,78 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Reporting Service API",
+    "version": "1.0.0",
+    "description": "Generates and manages business reports and exports"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "summary": "Health check endpoint",
+        "description": "Returns service health status",
+        "tags": ["Health"],
+        "responses": {
+          "200": { "description": "Service is healthy" }
+        }
+      }
+    },
+    "/api/v1/reports": {
+      "post": {
+        "summary": "Generate report",
+        "description": "Creates a new report based on specified criteria",
+        "tags": ["Reports"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Report generated successfully" }
+        }
+      },
+      "get": {
+        "summary": "List reports",
+        "description": "Retrieves available reports",
+        "tags": ["Reports"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Report list retrieved" }
+        }
+      }
+    },
+    "/api/v1/reports/{id}/export": {
+      "get": {
+        "summary": "Export report",
+        "description": "Exports report in PDF, Excel, or CSV format",
+        "tags": ["Reports"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Report exported" }
+        }
+      }
+    },
+    "/api/v1/schedules": {
+      "post": {
+        "summary": "Schedule report",
+        "description": "Schedules automatic report generation",
+        "tags": ["Schedules"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Report scheduled" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

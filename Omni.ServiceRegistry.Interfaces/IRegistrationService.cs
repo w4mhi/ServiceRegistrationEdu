@@ -21,6 +21,7 @@ public interface IRegistrationService
         string description,
         string contactEmail,
         string endpointsJson,
+        string? apiEndpointsJson,
         int heartbeatTimeout,
         int maxMissedHeartbeats);
 

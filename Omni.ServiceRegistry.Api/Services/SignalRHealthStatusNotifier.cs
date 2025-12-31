@@ -85,4 +85,39 @@ public class SignalRHealthStatusNotifier : IHealthStatusNotifier
             "RegistrationDenied",
             registrationId);
     }
+
+    public async Task NotifyAnalysisStartedAsync(Guid serviceId)
+    {
+        await hubContext.Clients.All.SendAsync(
+            "AnalysisStarted",
+            serviceId,
+            DateTime.UtcNow);
+    }
+
+    public async Task NotifyAnalysisCompletedAsync(Guid serviceId, Guid insightId)
+    {
+        await hubContext.Clients.All.SendAsync(
+            "AnalysisCompleted",
+            serviceId,
+            insightId,
+            DateTime.UtcNow);
+    }
+
+    public async Task NotifyAnalysisSkippedAsync(Guid serviceId, string reason)
+    {
+        await hubContext.Clients.All.SendAsync(
+            "AnalysisSkipped",
+            serviceId,
+            reason,
+            DateTime.UtcNow);
+    }
+
+    public async Task NotifyAnalysisFailedAsync(Guid serviceId, string errorMessage)
+    {
+        await hubContext.Clients.All.SendAsync(
+            "AnalysisFailed",
+            serviceId,
+            errorMessage,
+            DateTime.UtcNow);
+    }
 }

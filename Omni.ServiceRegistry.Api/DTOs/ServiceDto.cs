@@ -42,6 +42,11 @@ public class ServiceDto
     public List<string> Endpoints { get; set; } = new();
     
     /// <summary>
+    /// API endpoints exposed by the service
+    /// </summary>
+    public List<ApiEndpoint>? ApiEndpoints { get; set; }
+    
+    /// <summary>
     /// Current health status
     /// </summary>
     public string HealthStatus { get; set; } = string.Empty;

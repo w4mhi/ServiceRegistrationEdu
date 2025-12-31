@@ -108,6 +108,13 @@
                                         <small style="color: #94a3b8;">@reg.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</small>
                                     </td>
                                     <td class="text-center">
+                                        <button class="btn-validate-modern me-2" 
+                                                @onclick="@(() => ValidateRegistration(reg.RegistrationId))"
+                                                disabled="@(showApprovalModal || showDenialModal || showBulkApprovalModal || showValidationModal || isValidating)"
+                                                type="button"
+                                                title="Validate service endpoints">
+                                            <i class="bi bi-check2-square me-1"></i>Validate
+                                        </button>
                                         <button class="btn-approve-modern me-2" 
                                                 @onclick="@(() => ShowApprovalModal(reg.RegistrationId))"
                                                 disabled="@(showApprovalModal || showDenialModal || showBulkApprovalModal)"
@@ -888,6 +895,104 @@
     <div class="modal-backdrop show"></div>
 }
 
+<!-- Validation Results Modal -->
+@if (showValidationModal)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content" style="border-radius: 1rem; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);">
+                <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-top-left-radius: 1rem; border-top-right-radius: 1rem;">
+                    <h5 class="modal-title"><i class="bi bi-check2-square me-2"></i>Contract Validation Results</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseValidationModal"></button>
+                </div>
+                <div class="modal-body" style="padding: 2rem;">
+                    @if (isValidating)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary mb-3" role="status">
+                                <span class="visually-hidden">Validating...</span>
+                            </div>
+                            <p style="color: #64748b; font-size: 1.05rem;">Validating service endpoints...</p>
+                        </div>
+                    }
+                    else if (validationResult != null)
+                    {
+                        <!-- Validation Summary -->
+                        <div class="mb-4 p-3" style="background: @(validationResult.Status == "Passed" ? "#f0fdf4" : "#fef2f2"); border-left: 4px solid @(validationResult.Status == "Passed" ? "#22c55e" : "#ef4444"); border-radius: 0.5rem;">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="bi @(validationResult.Status == "Passed" ? "bi-check-circle-fill" : "bi-x-circle-fill") me-2" 
+                                   style="font-size: 1.5rem; color: @(validationResult.Status == "Passed" ? "#22c55e" : "#ef4444");"></i>
+                                <h6 style="margin: 0; color: #1e293b; font-weight: 600;">@validationResult.Summary</h6>
+                            </div>
+                            <div class="mt-3">
+                                <div class="row text-center">
+                                    <div class="col-4">
+                                        <div style="font-size: 0.875rem; color: #64748b;">Total Endpoints</div>
+                                        <div style="font-size: 1.5rem; font-weight: 700; color: #1e293b;">@validationResult.TotalEndpoints</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div style="font-size: 0.875rem; color: #64748b;">Reachable</div>
+                                        <div style="font-size: 1.5rem; font-weight: 700; color: #22c55e;">@validationResult.ReachableEndpoints</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div style="font-size: 0.875rem; color: #64748b;">Avg Response</div>
+                                        <div style="font-size: 1.5rem; font-weight: 700; color: #3b82f6;">@((int)validationResult.AverageResponseTimeMs)ms</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Endpoint Details -->
+                        @if (validationResult.EndpointChecks != null && validationResult.EndpointChecks.Count > 0)
+                        {
+                            <h6 style="color: #475569; font-weight: 600; margin-bottom: 1rem;">Endpoint Checks:</h6>
+                            @foreach (var check in validationResult.EndpointChecks)
+                            {
+                                <div class="mb-3 p-3" style="background: #f8fafc; border-radius: 0.5rem; border-left: 3px solid @(check.IsReachable ? "#22c55e" : "#ef4444");">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi @(check.IsReachable ? "bi-check-circle-fill" : "bi-x-circle-fill") me-2" 
+                                               style="color: @(check.IsReachable ? "#22c55e" : "#ef4444");"></i>
+                                            <code style="background: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.875rem;">@check.Endpoint</code>
+                                        </div>
+                                        @if (check.IsReachable)
+                                        {
+                                            <span class="badge bg-success">@(check.ResponseTimeMs)ms</span>
+                                        }
+                                    </div>
+                                    <div style="font-size: 0.875rem; color: @(check.IsReachable ? "#059669" : "#dc2626"); font-weight: 500;">
+                                        @check.Message
+                                    </div>
+                                </div>
+                            }
+                        }
+
+                        <!-- Failures -->
+                        @if (validationResult.Failures != null && validationResult.Failures.Count > 0)
+                        {
+                            <div class="mt-4">
+                                <h6 style="color: #dc2626; font-weight: 600; margin-bottom: 1rem;">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Validation Failures:
+                                </h6>
+                                <ul style="color: #475569; font-size: 0.9rem;">
+                                    @foreach (var failure in validationResult.Failures)
+                                    {
+                                        <li>@failure</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseValidationModal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
 @code {
     private List<RegistrationRequest>? registrations;
     private List<Service>? deletionRequests;
@@ -897,9 +1002,11 @@
     private bool showDenialModal = false;
     private bool showDeletionApprovalModal = false;
     private bool showBulkApprovalModal = false;
+    private bool showValidationModal = false;
     private bool isProcessingApproval = false;
     private bool isProcessingDeletion = false;
     private bool isProcessingBulkApproval = false;
+    private bool isValidating = false;
     private string? errorMessage = null;
     private Guid selectedRegistrationId;
     private Guid selectedServiceId;
@@ -909,6 +1016,7 @@
     private string bulkApprovalComments = "";
     private string bulkApprovalResultMessage = "";
     private bool bulkApprovalSuccess = false;
+    private ValidationResultDto? validationResult = null;
 
     private List<RegistrationRequest> pendingRegistrations => 
         registrations?.Where(r => r.Status == RegistrationStatus.Pending).ToList() ?? new List<RegistrationRequest>();
@@ -1036,11 +1144,49 @@
         showDenialModal = false;
         showDeletionApprovalModal = false;
         showBulkApprovalModal = false;
+        showValidationModal = false;
         isProcessingApproval = false;
         isProcessingDeletion = false;
         isProcessingBulkApproval = false;
+        isValidating = false;
         bulkApprovalResultMessage = "";
         bulkApprovalSuccess = false;
+        validationResult = null;
+    }
+    
+    private async Task ValidateRegistration(Guid registrationId)
+    {
+        Logger.LogInformation("ValidateRegistration called for {RegistrationId}", registrationId);
+        selectedRegistrationId = registrationId;
+        validationResult = null;
+        isValidating = true;
+        showValidationModal = true;
+        StateHasChanged();
+        
+        try
+        {
+            validationResult = await ApiClient.ValidateRegistrationAsync(registrationId);
+            Logger.LogInformation(
+                "Validation completed for {RegistrationId}: {Status}",
+                registrationId, validationResult?.Status);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error validating registration {RegistrationId}", registrationId);
+            errorMessage = $"Validation failed: {ex.Message}";
+        }
+        finally
+        {
+            isValidating = false;
+            StateHasChanged();
+        }
+    }
+    
+    private void CloseValidationModal()
+    {
+        showValidationModal = false;
+        validationResult = null;
+        StateHasChanged();
     }
 
     private void ShowBulkApprovalModal()
@@ -1127,7 +1273,7 @@
         try
         {
             errorMessage = null;
-            bool success = await ApiClient.ApproveRegistrationAsync(selectedRegistrationId, "dashboard-admin", approvalComments);
+            (bool success, string? error) = await ApiClient.ApproveRegistrationAsync(selectedRegistrationId, "dashboard-admin", approvalComments);
             
             if (success)
             {
@@ -1137,7 +1283,7 @@
             }
             else
             {
-                errorMessage = "Failed to approve registration. Please try again.";
+                errorMessage = error ?? "Failed to approve registration. Please try again.";
                 isProcessingApproval = false;
                 StateHasChanged(); // Force error message to display
             }

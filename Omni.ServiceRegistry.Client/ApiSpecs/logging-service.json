@@ -1,0 +1,70 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Logging Service API",
+    "version": "1.0.0",
+    "description": "Centralized logging, audit trails, and log analysis"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "summary": "Health check endpoint",
+        "description": "Returns service health status",
+        "tags": ["Health"],
+        "responses": {
+          "200": { "description": "Service is healthy" }
+        }
+      }
+    },
+    "/api/v1/logs": {
+      "post": {
+        "summary": "Submit log entry",
+        "description": "Submits a new log entry",
+        "tags": ["Logs"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "201": { "description": "Log entry created" }
+        }
+      },
+      "get": {
+        "summary": "Query logs",
+        "description": "Searches and retrieves log entries",
+        "tags": ["Logs"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Logs retrieved" }
+        }
+      }
+    },
+    "/api/v1/audit": {
+      "get": {
+        "summary": "Get audit trail",
+        "description": "Retrieves audit log for compliance",
+        "tags": ["Audit"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Audit trail retrieved" }
+        }
+      }
+    },
+    "/api/v1/alerts": {
+      "post": {
+        "summary": "Create log alert",
+        "description": "Creates alert rule for log patterns",
+        "tags": ["Alerts"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "201": { "description": "Alert created" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

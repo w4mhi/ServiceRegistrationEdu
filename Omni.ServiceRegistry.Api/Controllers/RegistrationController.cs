@@ -59,12 +59,14 @@ public class RegistrationController : ControllerBase
         {
             // Serialize endpoints to JSON
             string endpointsJson = JsonSerializer.Serialize(request.Endpoints);
+            string? apiEndpointsJson = request.ApiEndpoints != null ? JsonSerializer.Serialize(request.ApiEndpoints) : null;
 
             RegistrationRequest result = await registrationService.SubmitRegistrationAsync(
                 request.ServiceName,
                 request.Description,
                 request.ContactEmail,
                 endpointsJson,
+                apiEndpointsJson,
                 request.HeartbeatTimeout,
                 request.MaxMissedHeartbeats);
 
