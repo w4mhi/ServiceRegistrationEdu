@@ -9,7 +9,13 @@ echo ""
 echo "Stopping any running instances..."
 pkill -f "dotnet.*Omni.ServiceRegistry.Api" 2>/dev/null
 pkill -f "dotnet.*Omni.ServiceRegistry.Dashboard" 2>/dev/null
+
+# Also kill by port to ensure ports are freed
+lsof -ti:5159 2>/dev/null | xargs kill -9 2>/dev/null
+lsof -ti:5083 2>/dev/null | xargs kill -9 2>/dev/null
 sleep 2
+
+echo "✓ Stopped all instances and freed ports"
 
 # Check PostgreSQL
 echo ""

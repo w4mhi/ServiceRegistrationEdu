@@ -24,6 +24,7 @@ public class DeletionCycleRepository : IDeletionCycleRepository
     public async Task<List<ServiceDeletionCycle>> GetByServiceIdAsync(Guid serviceId)
     {
         List<ServiceDeletionCycle> cycles = await dbContext.ServiceDeletionCycles
+            .IgnoreQueryFilters() // Include cycles for deleted services
             .Where(c => c.ServiceId == serviceId)
             .OrderBy(c => c.CycleNumber)
             .ToListAsync();
@@ -34,6 +35,7 @@ public class DeletionCycleRepository : IDeletionCycleRepository
     public async Task<ServiceDeletionCycle?> GetByIdAsync(Guid serviceDeletionCycleId)
     {
         ServiceDeletionCycle? cycle = await dbContext.ServiceDeletionCycles
+            .IgnoreQueryFilters() // Include cycles for deleted services
             .FirstOrDefaultAsync(c => c.ServiceDeletionCycleId == serviceDeletionCycleId);
         
         return cycle;
@@ -42,6 +44,7 @@ public class DeletionCycleRepository : IDeletionCycleRepository
     public async Task<ServiceDeletionCycle?> GetLatestByServiceIdAsync(Guid serviceId)
     {
         ServiceDeletionCycle? cycle = await dbContext.ServiceDeletionCycles
+            .IgnoreQueryFilters() // Include cycles for deleted services
             .Where(c => c.ServiceId == serviceId)
             .OrderByDescending(c => c.CycleNumber)
             .FirstOrDefaultAsync();
@@ -65,6 +68,7 @@ public class DeletionCycleRepository : IDeletionCycleRepository
     public async Task<List<ServiceDeletionCycle>> GetPendingRestorationsAsync()
     {
         List<ServiceDeletionCycle> cycles = await dbContext.ServiceDeletionCycles
+            .IgnoreQueryFilters() // Include cycles for deleted services
             .Where(c => c.RestorationRequestedAt != null && c.RestorationApprovedAt == null)
             .OrderBy(c => c.RestorationRequestedAt)
             .ToListAsync();
@@ -75,6 +79,7 @@ public class DeletionCycleRepository : IDeletionCycleRepository
     public async Task<List<ServiceDeletionCycle>> GetAllAsync()
     {
         List<ServiceDeletionCycle> cycles = await dbContext.ServiceDeletionCycles
+            .IgnoreQueryFilters() // Include cycles for deleted services
             .ToListAsync();
         
         return cycles;

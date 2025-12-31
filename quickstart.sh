@@ -17,6 +17,10 @@ echo "🧹 Stopping any running services..."
 pkill -f "Omni.ServiceRegistry.Api" 2>/dev/null && echo "  ✓ API stopped" || echo "  ℹ️  No API running"
 pkill -f "Omni.ServiceRegistry.Dashboard" 2>/dev/null && echo "  ✓ Dashboard stopped" || echo "  ℹ️  No Dashboard running"
 
+# Also kill by port to ensure ports are freed
+lsof -ti:5159 2>/dev/null | xargs kill -9 2>/dev/null && echo "  ✓ Port 5159 freed" || true
+lsof -ti:5083 2>/dev/null | xargs kill -9 2>/dev/null && echo "  ✓ Port 5083 freed" || true
+
 # Wait for processes to release connections
 sleep 2
 
