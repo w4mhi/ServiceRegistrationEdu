@@ -132,6 +132,21 @@ public class Service
     public DateTime? DeletedAt { get; set; }
     
     /// <summary>
+    /// Count of deletion/restoration cycles this service has undergone
+    /// </summary>
+    public int DeletionCycleCount { get; set; } = 0;
+    
+    /// <summary>
+    /// Count of consecutive healthy heartbeats since restoration consideration
+    /// </summary>
+    public int ConsecutiveHealthyHeartbeats { get; set; } = 0;
+    
+    /// <summary>
+    /// Navigation property to deletion history cycles
+    /// </summary>
+    public ICollection<ServiceDeletionCycle> DeletionHistory { get; set; } = new List<ServiceDeletionCycle>();
+    
+    /// <summary>
     /// Optimistic concurrency token (EF Core)
     /// </summary>
     public byte[]? RowVersion { get; set; }

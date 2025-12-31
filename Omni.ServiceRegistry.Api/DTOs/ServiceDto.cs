@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Omni.ServiceRegistry.Models;
 
 using System;
 using System.Collections.Generic;
@@ -79,4 +80,24 @@ public class ServiceDto
     /// Service last update timestamp
     /// </summary>
     public DateTime UpdatedAt { get; set; }
+    
+    /// <summary>
+    /// Service deletion status
+    /// </summary>
+    public DeletionStatus DeletionStatus { get; set; } = DeletionStatus.Active;
+    
+    /// <summary>
+    /// Reason for deletion request
+    /// </summary>
+    public string? DeletionReason { get; set; }
+    
+    /// <summary>
+    /// Administrator who approved deletion
+    /// </summary>
+    public string? DeletionApprovedBy { get; set; }
+    
+    /// <summary>
+    /// Timestamp when deletion was approved
+    /// </summary>
+    public DateTime? DeletionApprovedAt { get; set; }
 }

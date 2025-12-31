@@ -147,8 +147,8 @@ public class SimulatedService
 
         try
         {
-            // Poll for approval status (wait for manual approval)
-            for (int i = 0; i < 120; i++) // Wait up to 2 minutes
+            // Poll for approval status indefinitely (no timeout - for demo purposes)
+            while (true)
             {
                 RegistrationResponseDto? status = await client.GetRegistrationStatusAsync(registrationId.Value);
                 
@@ -174,9 +174,6 @@ public class SimulatedService
             logger.LogInformation("Service '{ServiceName}' approval wait cancelled (shutdown)", serviceName);
             return false;
         }
-
-        logger.LogError("Timeout waiting for approval of '{ServiceName}'", serviceName);
-        return false;
     }
 
     private async Task HeartbeatLoopAsync(CancellationToken cancellationToken)

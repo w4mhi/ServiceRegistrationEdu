@@ -46,5 +46,26 @@ public interface IAdministratorService
     /// <summary>
     /// Approve a deletion request (soft delete)
     /// </summary>
-    Task ApproveDeletionAsync(Guid serviceId, string approvedBy);
+    Task ApproveDeletionAsync(Guid serviceId, string approvedBy, string? reason = null);
+    
+    /// <summary>
+    /// Check if a deleted service is eligible for restoration (quick or full)
+    /// </summary>
+    Task<(bool IsEligible, string? Reason, string? RestorationType, int? DaysUntilExpiration)> CheckRestorationEligibilityAsync(Guid serviceId);
+    
+    /// <summary>
+    /// Restore a recently deleted service (within quick restore window, no heartbeat validation)
+    /// </summary>
+    Task<Service> RestoreServiceQuicklyAsync(Guid serviceId, string restoredBy, string reason);
+    
+    /// <summary>
+    /// Restore a service deleted beyond quick restore window (requires heartbeat validation)
+    /// </summary>
+    Task<Service> RestoreServiceFullyAsync(
+        Guid serviceId, 
+        string restoredBy, 
+        string reason, 
+        string? justification = null, 
+        bool ownerVerified = false, 
+        bool endpointsVerified = false);
 }

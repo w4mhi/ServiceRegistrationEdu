@@ -1,0 +1,414 @@
+@page "/analytics"
+@rendermode InteractiveServer
+@inject ServiceRegistryApiClient ApiClient
+@inject NavigationManager Navigation
+@inject ILogger<Analytics> Logger
+@using Omni.ServiceRegistry.Dashboard.DTOs
+
+<PageTitle>Service Registry - Restoration Analytics</PageTitle>
+
+<div class="page-header-modern">
+    <h1 class="page-title-modern">📊 Restoration Analytics</h1>
+    <button class="btn-refresh-top" @onclick="RefreshData">
+        <i class="bi bi-arrow-clockwise"></i>
+        <span>Refresh</span>
+    </button>
+</div>
+
+<!-- Summary Cards -->
+<div class="stats-grid-modern">
+    @if (isLoading)
+    {
+        <div style="grid-column: 1 / -1;">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3 text-muted fw-bold">Loading analytics...</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="stat-card" style="--card-color: #10b981;">
+            <div class="stat-icon">🔄</div>
+            <div class="stat-value">@totalRestorations</div>
+            <div class="stat-label">Total Restorations</div>
+        </div>
+        <div class="stat-card" style="--card-color: #3b82f6;">
+            <div class="stat-icon">⚡</div>
+            <div class="stat-value">@quickRestorations</div>
+            <div class="stat-label">Quick Restorations</div>
+        </div>
+        <div class="stat-card" style="--card-color: #f59e0b;">
+            <div class="stat-icon">🔧</div>
+            <div class="stat-value">@fullRestorations</div>
+            <div class="stat-label">Full Restorations</div>
+        </div>
+        <div class="stat-card" style="--card-color: #ef4444;">
+            <div class="stat-icon">⚠️</div>
+            <div class="stat-value">@frequentlyDeletedCount</div>
+            <div class="stat-label">Frequently Deleted</div>
+        </div>
+    }
+</div>
+
+<!-- Restoration Trends -->
+<div class="services-card-modern mt-4">
+    <div class="services-header-modern">
+        <h4><i class="bi bi-graph-up"></i>Restoration Patterns</h4>
+    </div>
+    <div class="p-4">
+        @if (isLoading)
+        {
+            <div class="loading-modern">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Loading patterns...</p>
+            </div>
+        }
+        else if (deletionCycles == null || deletionCycles.Count == 0)
+        {
+            <div class="empty-state-modern">
+                <i class="bi bi-inbox"></i>
+                <p>No restoration data available yet</p>
+            </div>
+        }
+        else
+        {
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="analytics-metric">
+                        <div class="metric-label">Average Time to Restoration</div>
+                        <div class="metric-value">@GetAverageRestorationTime()</div>
+                        <div class="metric-description">Average days between deletion and restoration</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="analytics-metric">
+                        <div class="metric-label">Restoration Success Rate</div>
+                        <div class="metric-value">@GetRestorationRate()%</div>
+                        <div class="metric-description">Percentage of deleted services that were restored</div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Frequently Deleted Services -->
+<div class="services-card-modern mt-4">
+    <div class="services-header-modern">
+        <h4><i class="bi bi-exclamation-triangle-fill"></i>Frequently Deleted Services</h4>
+    </div>
+    <div class="p-0">
+        @if (isLoading)
+        {
+            <div class="loading-modern">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Loading services...</p>
+            </div>
+        }
+        else if (frequentlyDeleted == null || frequentlyDeleted.Count == 0)
+        {
+            <div class="empty-state-modern">
+                <i class="bi bi-inbox"></i>
+                <p>No services with multiple deletion cycles</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover table-modern-approvals mb-0">
+                    <thead>
+                        <tr>
+                            <th class="ps-4">Service Name</th>
+                            <th>Total Cycles</th>
+                            <th>Last Restoration</th>
+                            <th>Status</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in frequentlyDeleted.Take(10))
+                        {
+                            <tr class="registration-row-modern">
+                                <td class="ps-4">
+                                    <div class="service-name-modern">@item.ServiceName</div>
+                                    <small style="color: #64748b;">@item.ServiceId</small>
+                                </td>
+                                <td>
+                                    <span class="badge-modern degraded" style="font-size: 1rem;">
+                                        @item.CycleCount cycles
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (item.LastRestoration.HasValue)
+                                    {
+                                        <div style="font-weight: 600;">@item.LastRestoration.Value.ToLocalTime().ToString("MMM dd, yyyy")</div>
+                                        <small style="color: #94a3b8;">@GetRelativeTime(item.LastRestoration.Value)</small>
+                                    }
+                                    else
+                                    {
+                                        <em style="color: #cbd5e1;">Never restored</em>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge-modern @GetStatusClass(item.CurrentStatus)">
+                                        @item.CurrentStatus
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn-details-modern" @onclick="() => ViewServiceDetails(item.ServiceId)">
+                                        <i class="bi bi-info-circle me-1"></i>Details
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Recent Restoration Activity -->
+<div class="services-card-modern mt-4">
+    <div class="services-header-modern">
+        <h4><i class="bi bi-clock-history"></i>Recent Restoration Activity</h4>
+    </div>
+    <div class="p-0">
+        @if (isLoading)
+        {
+            <div class="loading-modern">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Loading activity...</p>
+            </div>
+        }
+        else if (recentActivity == null || recentActivity.Count == 0)
+        {
+            <div class="empty-state-modern">
+                <i class="bi bi-inbox"></i>
+                <p>No recent restoration activity</p>
+            </div>
+        }
+        else
+        {
+            <div class="p-4">
+                <div class="activity-timeline">
+                    @foreach (var activity in recentActivity.Take(15))
+                    {
+                        <div class="activity-item">
+                            <div class="activity-icon @(activity.RestorationMethod == "Quick" ? "quick" : "full")">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </div>
+                            <div class="activity-content">
+                                <div class="activity-title">
+                                    <strong>@activity.ServiceName</strong> restored via @activity.RestorationMethod Restore
+                                </div>
+                                <div class="activity-meta">
+                                    <i class="bi bi-person me-1"></i>@activity.RestoredBy
+                                    <i class="bi bi-calendar ms-3 me-1"></i>@activity.RestoredAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")
+                                </div>
+                                @if (!string.IsNullOrEmpty(activity.Reason))
+                                {
+                                    <div class="activity-reason">@activity.Reason</div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool isLoading = true;
+    private int totalRestorations = 0;
+    private int quickRestorations = 0;
+    private int fullRestorations = 0;
+    private int frequentlyDeletedCount = 0;
+    private List<ServiceDeletionCycleDto>? deletionCycles;
+    private List<FrequentlyDeletedService> frequentlyDeleted = new();
+    private List<RecentRestorationActivity> recentActivity = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAnalytics();
+    }
+
+    private async Task LoadAnalytics()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Load all services to get deletion cycle data
+            List<Service> allServices = await ApiClient.GetAllServicesAsync();
+            
+            // Calculate metrics
+            totalRestorations = 0;
+            quickRestorations = 0;
+            fullRestorations = 0;
+            deletionCycles = new List<ServiceDeletionCycleDto>();
+            frequentlyDeleted = new List<FrequentlyDeletedService>();
+            recentActivity = new List<RecentRestorationActivity>();
+
+            // Load deletion cycles for each service
+            foreach (Service service in allServices)
+            {
+                try
+                {
+                    List<ServiceDeletionCycleDto> cycles = await ApiClient.GetDeletionCyclesAsync(service.ServiceId);
+                    deletionCycles.AddRange(cycles);
+
+                    int restoredCount = cycles.Count(c => c.RestorationApprovedAt.HasValue);
+                    if (restoredCount > 0)
+                    {
+                        totalRestorations += restoredCount;
+                        quickRestorations += cycles.Count(c => c.RestorationMethod == "Quick");
+                        fullRestorations += cycles.Count(c => c.RestorationMethod == "Full");
+                    }
+
+                    // Track frequently deleted services (2+ cycles)
+                    if (cycles.Count >= 2)
+                    {
+                        frequentlyDeleted.Add(new FrequentlyDeletedService
+                        {
+                            ServiceId = service.ServiceId,
+                            ServiceName = service.ServiceName,
+                            CycleCount = cycles.Count,
+                            LastRestoration = cycles
+                                .Where(c => c.RestorationApprovedAt.HasValue)
+                                .OrderByDescending(c => c.RestorationApprovedAt)
+                                .FirstOrDefault()?.RestorationApprovedAt,
+                            CurrentStatus = service.DeletionStatus.ToString()
+                        });
+                    }
+
+                    // Track recent restoration activity
+                    foreach (ServiceDeletionCycleDto cycle in cycles.Where(c => c.RestorationApprovedAt.HasValue))
+                    {
+                        recentActivity.Add(new RecentRestorationActivity
+                        {
+                            ServiceId = service.ServiceId,
+                            ServiceName = service.ServiceName,
+                            RestoredAt = cycle.RestorationApprovedAt!.Value,
+                            RestoredBy = cycle.RestorationApprovedBy ?? "Unknown",
+                            RestorationMethod = cycle.RestorationMethod ?? "Unknown",
+                            Reason = cycle.RestorationReason
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to load cycles for service {ServiceId}", service.ServiceId);
+                }
+            }
+
+            frequentlyDeletedCount = frequentlyDeleted.Count;
+            frequentlyDeleted = frequentlyDeleted.OrderByDescending(f => f.CycleCount).ToList();
+            recentActivity = recentActivity.OrderByDescending(a => a.RestoredAt).ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading analytics");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadAnalytics();
+    }
+
+    private string GetAverageRestorationTime()
+    {
+        if (deletionCycles == null || !deletionCycles.Any(c => c.RestorationApprovedAt.HasValue))
+            return "N/A";
+
+        List<ServiceDeletionCycleDto> restoredCycles = deletionCycles
+            .Where(c => c.RestorationApprovedAt.HasValue && c.DeletionApprovedAt.HasValue)
+            .ToList();
+
+        if (restoredCycles.Count == 0)
+            return "N/A";
+
+        double averageDays = restoredCycles
+            .Select(c => (c.RestorationApprovedAt!.Value - c.DeletionApprovedAt!.Value).TotalDays)
+            .Average();
+
+        return $"{averageDays:F1} days";
+    }
+
+    private string GetRestorationRate()
+    {
+        if (deletionCycles == null || deletionCycles.Count == 0)
+            return "0";
+
+        int totalDeletions = deletionCycles.Count;
+        int totalRestored = deletionCycles.Count(c => c.RestorationApprovedAt.HasValue);
+
+        return ((double)totalRestored / totalDeletions * 100).ToString("F1");
+    }
+
+    private string GetRelativeTime(DateTime timestamp)
+    {
+        TimeSpan diff = DateTime.UtcNow - timestamp;
+        
+        if (diff.TotalMinutes < 1)
+            return "just now";
+        if (diff.TotalHours < 1)
+            return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays < 1)
+            return $"{(int)diff.TotalHours}h ago";
+        
+        return $"{(int)diff.TotalDays}d ago";
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "Active" => "healthy",
+            "Deleted" => "dead",
+            "PendingDeletion" => "degraded",
+            _ => "unhealthy"
+        };
+    }
+
+    private void ViewServiceDetails(Guid serviceId)
+    {
+        Navigation.NavigateTo($"/service/{serviceId}");
+    }
+
+    private class FrequentlyDeletedService
+    {
+        public Guid ServiceId { get; set; }
+        public string ServiceName { get; set; } = string.Empty;
+        public int CycleCount { get; set; }
+        public DateTime? LastRestoration { get; set; }
+        public string CurrentStatus { get; set; } = string.Empty;
+    }
+
+    private class RecentRestorationActivity
+    {
+        public Guid ServiceId { get; set; }
+        public string ServiceName { get; set; } = string.Empty;
+        public DateTime RestoredAt { get; set; }
+        public string RestoredBy { get; set; } = string.Empty;
+        public string RestorationMethod { get; set; } = string.Empty;
+        public string? Reason { get; set; }
+    }
+}

@@ -5,6 +5,7 @@
 @inject NavigationManager Navigation
 @inject ILogger<PendingApprovals> Logger
 @implements IAsyncDisposable
+@using Omni.ServiceRegistry.Dashboard.DTOs
 
 <PageTitle>Pending Approvals</PageTitle>
 
@@ -30,6 +31,18 @@
         <span>Denied Services</span>
         <span class="tab-badge denied">@deniedCount</span>
     </button>
+    <button class="approval-tab @(activeTab == "deletions" ? "active" : "") @(deletionCount > 0 ? "has-deletions" : "")" 
+            @onclick="@(() => SwitchTab("deletions"))">
+        <i class="bi bi-trash"></i>
+        <span>Pending Deletions</span>
+        <span class="tab-badge deletion">@deletionCount</span>
+    </button>
+    <button class="approval-tab @(activeTab == "deleted-history" ? "active" : "")" 
+            @onclick="@(() => SwitchTab("deleted-history"))">
+        <i class="bi bi-archive"></i>
+        <span>Deleted Services</span>
+        <span class="tab-badge">@deletedHistoryCount</span>
+    </button>
 </div>
 
 <!-- Pending Approvals Section -->
@@ -37,7 +50,17 @@
 {
     <div class="approvals-card-modern">
         <div class="approvals-header-modern">
-            <h4><i class="bi bi-clipboard-check-fill"></i>Pending Registration Requests</h4>
+            <h4 style="margin: 0;"><i class="bi bi-clipboard-check-fill"></i>Pending Registration Requests</h4>
+            @if (pendingRegistrations != null && pendingRegistrations.Count > 0)
+            {
+                <button class="btn-approve-modern" 
+                        @onclick="ShowBulkApprovalModal" 
+                        disabled="@(showApprovalModal || showDenialModal || showBulkApprovalModal)"
+                        type="button"
+                        style="flex-shrink: 0;">
+                    <i class="bi bi-check-all me-1"></i>Approve All (@(pendingRegistrations?.Count ?? 0))
+                </button>
+            }
         </div>
         <div class="p-0">
             @if (registrations == null)
@@ -87,11 +110,13 @@
                                     <td class="text-center">
                                         <button class="btn-approve-modern me-2" 
                                                 @onclick="@(() => ShowApprovalModal(reg.RegistrationId))"
+                                                disabled="@(showApprovalModal || showDenialModal || showBulkApprovalModal)"
                                                 type="button">
                                             <i class="bi bi-check-circle me-1"></i>Approve
                                         </button>
                                         <button class="btn-deny-modern" 
                                                 @onclick="@(() => ShowDenialModal(reg.RegistrationId))"
+                                                disabled="@(showApprovalModal || showDenialModal || showBulkApprovalModal)"
                                                 type="button">
                                             <i class="bi bi-x-circle me-1"></i>Deny
                                         </button>
@@ -179,9 +204,206 @@
                                     <td class="text-center">
                                         <button class="btn-reapprove" 
                                                 @onclick="@(() => ShowApprovalModal(reg.RegistrationId))"
+                                                disabled="@(showApprovalModal || showDenialModal || showBulkApprovalModal)"
                                                 type="button"
                                                 title="Re-approve this denied registration">
                                             <i class="bi bi-arrow-counterclockwise me-1"></i>Re-approve
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<!-- Pending Deletions Section -->
+@if (activeTab == "deletions")
+{
+    <div class="approvals-card-modern deletion-section">
+        <div class="approvals-header-modern deletion-header">
+            <h4><i class="bi bi-trash-fill"></i>Pending Service Deletions</h4>
+        </div>
+        <div class="p-0">
+            @if (deletionRequests == null)
+            {
+                <div class="loading-modern">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p>Loading deletion requests...</p>
+                </div>
+            }
+            else if (deletionRequests.Count == 0)
+            {
+                <div class="empty-state-modern">
+                    <i class="bi bi-inbox"></i>
+                    <p>No pending deletion requests</p>
+                    <small style="color: #94a3b8;">No services are scheduled for deletion</small>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover table-modern-approvals mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">Service Details</th>
+                                <th>Owner</th>
+                                <th>Requested Date</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (Service service in deletionRequests)
+                            {
+                                <tr class="registration-row-modern deletion-row">
+                                    <td class="ps-4">
+                                        <div class="deletion-service-name">
+                                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                            @service.ServiceName
+                                        </div>
+                                        <div class="deletion-service-desc">@service.Description</div>
+                                        <div class="deletion-reason">
+                                            <i class="bi bi-chat-left-text-fill me-2"></i>
+                                            <strong>Reason:</strong> 
+                                            @if (!string.IsNullOrEmpty(service.DeletionReason))
+                                            {
+                                                <span>@service.DeletionReason</span>
+                                            }
+                                            else
+                                            {
+                                                <span style="color: #94a3b8; font-style: italic;">(No reason provided yet)</span>
+                                            }
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(service.DeletionComments))
+                                        {
+                                            <div class="deletion-comments">
+                                                <small><strong>Comments:</strong> @service.DeletionComments</small>
+                                            </div>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="deletion-email">@service.ContactEmail</div>
+                                        @if (!string.IsNullOrEmpty(service.DeletionRequestedBy))
+                                        {
+                                            <small style="color: #94a3b8;">Requested by: @service.DeletionRequestedBy</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (service.DeletionRequestedAt.HasValue)
+                                        {
+                                            <div class="deletion-date">@service.DeletionRequestedAt.Value.ToLocalTime().ToString("MMM dd, yyyy")</div>
+                                            <small class="deletion-time">@service.DeletionRequestedAt.Value.ToLocalTime().ToString("HH:mm:ss")</small>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn-deny-modern" 
+                                                @onclick="@(() => ShowDeletionApprovalModal(service.ServiceId))"
+                                                disabled="@(showDeletionApprovalModal || showBulkApprovalModal)"
+                                                type="button"
+                                                title="Delete this service permanently">
+                                            <i class="bi bi-trash me-1"></i>Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<!-- Deleted Services History Section -->
+@if (activeTab == "deleted-history")
+{
+    <div class="approvals-card-modern deleted-history-section">
+        <div class="approvals-header-modern deleted-history-header">
+            <h4><i class="bi bi-archive-fill"></i>Deleted Services History</h4>
+        </div>
+        <div class="p-0">
+            @if (deletedServices == null)
+            {
+                <div class="loading-modern">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p>Loading deleted services...</p>
+                </div>
+            }
+            else if (deletedServices.Count == 0)
+            {
+                <div class="empty-state-modern">
+                    <i class="bi bi-inbox"></i>
+                    <p>No deleted services</p>
+                    <small style="color: #94a3b8;">No services have been deleted yet</small>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover table-modern-approvals mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">Service Details</th>
+                                <th>Owner</th>
+                                <th>Deleted Date</th>
+                                <th>Reason</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (Service service in deletedServices)
+                            {
+                                <tr class="registration-row-modern deleted-history-row">
+                                    <td class="ps-4">
+                                        <div class="service-name-approvals">
+                                            <i class="bi bi-archive me-2"></i>
+                                            @service.ServiceName
+                                        </div>
+                                        <div class="service-desc-approvals">@service.Description</div>
+                                    </td>
+                                    <td>
+                                        <div style="font-weight: 600; color: #1e293b;">@service.ContactEmail</div>
+                                        @if (!string.IsNullOrEmpty(service.DeletionApprovedBy))
+                                        {
+                                            <small style="color: #94a3b8;">Deleted by: @service.DeletionApprovedBy</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (service.DeletionApprovedAt.HasValue)
+                                        {
+                                            <div style="font-weight: 600;">@service.DeletionApprovedAt.Value.ToLocalTime().ToString("MMM dd, yyyy")</div>
+                                            <small style="color: #94a3b8;">@service.DeletionApprovedAt.Value.ToLocalTime().ToString("HH:mm:ss")</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(service.DeletionReason))
+                                        {
+                                            <small style="color: #64748b;">@service.DeletionReason</small>
+                                        }
+                                        else
+                                        {
+                                            <small style="color: #94a3b8; font-style: italic;">(No reason provided)</small>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" 
+                                                class="btn-history-modern me-2" 
+                                                @onclick="() => ShowHistoryModal(service.ServiceId)"
+                                                disabled="@(showHistoryModal || showRestoreModal)">
+                                            <i class="bi bi-clock-history"></i> History
+                                        </button>
+                                        <button type="button" 
+                                                class="btn-restore-modern" 
+                                                @onclick="() => ShowRestoreModalForService(service.ServiceId)"
+                                                disabled="@(showHistoryModal || showRestoreModal || isLoadingEligibility)">
+                                            <i class="bi bi-arrow-counterclockwise"></i> Restore
                                         </button>
                                     </td>
                                 </tr>
@@ -217,9 +439,92 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn-modal-cancel" @onclick="CloseModals">Cancel</button>
-                    <button type="button" class="btn-approve-modern" @onclick="ApproveRegistration">
-                        <i class="bi bi-check-circle me-1"></i>Approve
+                    <button type="button" class="btn-modal-cancel" @onclick="CloseModals" disabled="@isProcessingApproval">Cancel</button>
+                    <button type="button" class="btn-approve-modern" @onclick="ApproveRegistration" disabled="@isProcessingApproval">
+                        @if (isProcessingApproval)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                            <span>Processing...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-circle me-1"></i>
+                            <span>Approve</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+@if (showBulkApprovalModal)
+{
+    <div class="modal modal-modern show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-check-all me-2"></i>Approve All Registrations</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size: 1.05rem; color: #1e293b; margin-bottom: 1.5rem;">
+                        Are you sure you want to approve <strong>@(pendingRegistrations?.Count ?? 0)</strong> registration(s)?
+                    </p>
+                    
+                    @if (!string.IsNullOrEmpty(bulkApprovalResultMessage))
+                    {
+                        <div class="@(bulkApprovalSuccess ? "alert-modern-success" : "alert-modern-danger") mb-3">
+                            <i class="bi @(bulkApprovalSuccess ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill") me-2"></i>
+                            @bulkApprovalResultMessage
+                        </div>
+                    }
+                    
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert-modern-danger mb-3">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                        </div>
+                    }
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Global Comment (optional)</label>
+                        <textarea 
+                            class="form-control" 
+                            rows="3" 
+                            @bind="bulkApprovalComments" 
+                            placeholder="This comment will be applied to all approvals..."
+                            disabled="@isProcessingBulkApproval"></textarea>
+                        <small class="form-text text-muted">This comment will be added to all approved registrations</small>
+                    </div>
+                    
+                    @if (pendingRegistrations != null && pendingRegistrations.Count > 0)
+                    {
+                        <div class="mt-3 p-3" style="background-color: #f1f5f9; border-radius: 8px; max-height: 200px; overflow-y: auto;">
+                            <p style="font-weight: 600; margin-bottom: 0.5rem; color: #475569;">Services to be approved:</p>
+                            <ul style="margin: 0; padding-left: 1.5rem;">
+                                @foreach (RegistrationRequest reg in pendingRegistrations)
+                                {
+                                    <li style="margin-bottom: 0.25rem; color: #64748b;">@reg.ServiceName (@reg.ContactEmail)</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal-cancel" @onclick="CloseModals" disabled="@isProcessingBulkApproval">Cancel</button>
+                    <button type="button" class="btn-approve-modern" @onclick="ApproveAllRegistrations" disabled="@isProcessingBulkApproval">
+                        @if (isProcessingBulkApproval)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                            <span>Processing...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-all me-1"></i>
+                            <span>Approve All @(pendingRegistrations?.Count ?? 0)</span>
+                        }
                     </button>
                 </div>
             </div>
@@ -254,10 +559,328 @@
                     }
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn-modal-cancel" @onclick="CloseModals">Cancel</button>
-                    <button type="button" class="btn-deny-modern" @onclick="DenyRegistration">
-                        <i class="bi bi-x-circle me-1"></i>Deny
+                    <button type="button" class="btn-modal-cancel" @onclick="CloseModals" disabled="@isProcessingApproval">Cancel</button>
+                    <button type="button" class="btn-deny-modern" @onclick="DenyRegistration" disabled="@isProcessingApproval">
+                        @if (isProcessingApproval)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                            <span>Processing...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-x-circle me-1"></i>
+                            <span>Deny</span>
+                        }
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+@if (showDeletionApprovalModal)
+{
+    <div class="modal modal-modern show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-trash-fill me-2"></i>Delete Service</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size: 1.05rem; color: #1e293b; margin-bottom: 1.5rem;">
+                        <strong>Warning:</strong> This will permanently delete the service from the registry.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label">Reason (Required - minimum 10 characters)</label>
+                        <textarea class="form-control" rows="4" @bind="deletionReason" required placeholder="Explain why this service is being deleted..."></textarea>
+                        <small class="form-text" style="display: block; margin-top: 0.25rem; color: @(deletionReason.Length >= 10 ? "#16a34a" : "#94a3b8");">
+                            @deletionReason.Length / 10 characters minimum
+                        </small>
+                    </div>
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert-modern-danger">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal-cancel" @onclick="CloseModals" disabled="@isProcessingDeletion">Cancel</button>
+                    <button type="button" class="btn-deny-modern" @onclick="ApproveDeletion" disabled="@isProcessingDeletion">
+                        @if (isProcessingDeletion)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                            <span>Deleting...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-trash me-1"></i>
+                            <span>Delete Service</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+@if (showHistoryModal)
+{
+    <div class="modal modal-modern show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>Deletion & Restoration History</h5>
+                    <button type="button" class="btn-close" @onclick="CloseHistoryModal"></button>
+                </div>
+                <div class="modal-body" style="max-height: 600px; overflow-y: auto;">
+                    @if (isLoadingHistory)
+                    {
+                        <div class="text-center p-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-3" style="color: #64748b;">Loading history...</p>
+                        </div>
+                    }
+                    else if (deletionCycles == null || deletionCycles.Count == 0)
+                    {
+                        <div class="text-center p-4">
+                            <i class="bi bi-inbox" style="font-size: 3rem; color: #94a3b8;"></i>
+                            <p class="mt-3" style="color: #64748b;">No deletion history found</p>
+                            <small style="color: #94a3b8;">This service has no recorded deletion/restoration cycles</small>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="deletion-timeline">
+                            @foreach (ServiceDeletionCycleDto cycle in deletionCycles.OrderByDescending(c => c.CycleNumber))
+                            {
+                                <div class="timeline-cycle">
+                                    <div class="timeline-cycle-header">
+                                        <span class="cycle-badge">Cycle @cycle.CycleNumber</span>
+                                    </div>
+                                    
+                                    <!-- Deletion Request -->
+                                    <div class="timeline-event deletion-event">
+                                        <div class="timeline-marker deletion-marker">
+                                            <i class="bi bi-trash"></i>
+                                        </div>
+                                        <div class="timeline-content">
+                                            <div class="timeline-title">Deletion Requested</div>
+                                            <div class="timeline-meta">
+                                                <i class="bi bi-person me-1"></i>@cycle.DeletionRequestedBy
+                                                <i class="bi bi-calendar ms-3 me-1"></i>@cycle.DeletionRequestedAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss")
+                                            </div>
+                                            <div class="timeline-reason">
+                                                <strong>Reason:</strong> @cycle.DeletionReason
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    @if (cycle.DeletionApprovedAt.HasValue)
+                                    {
+                                        <!-- Deletion Approved -->
+                                        <div class="timeline-event deletion-event">
+                                            <div class="timeline-marker deletion-marker">
+                                                <i class="bi bi-check-circle"></i>
+                                            </div>
+                                            <div class="timeline-content">
+                                                <div class="timeline-title">Deletion Approved</div>
+                                                <div class="timeline-meta">
+                                                    <i class="bi bi-person me-1"></i>@cycle.DeletionApprovedBy
+                                                    <i class="bi bi-calendar ms-3 me-1"></i>@cycle.DeletionApprovedAt.Value.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss")
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+
+                                    @if (cycle.RestorationRequestedAt.HasValue)
+                                    {
+                                        <!-- Restoration Request -->
+                                        <div class="timeline-event restoration-event">
+                                            <div class="timeline-marker restoration-marker">
+                                                <i class="bi bi-arrow-counterclockwise"></i>
+                                            </div>
+                                            <div class="timeline-content">
+                                                <div class="timeline-title">
+                                                    Restoration Requested
+                                                    @if (!string.IsNullOrEmpty(cycle.RestorationMethod))
+                                                    {
+                                                        <span class="restoration-badge restoration-badge-@cycle.RestorationMethod.ToLower()">
+                                                            @cycle.RestorationMethod Restore
+                                                        </span>
+                                                    }
+                                                </div>
+                                                <div class="timeline-meta">
+                                                    <i class="bi bi-person me-1"></i>@cycle.RestorationRequestedBy
+                                                    <i class="bi bi-calendar ms-3 me-1"></i>@cycle.RestorationRequestedAt.Value.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss")
+                                                </div>
+                                                @if (!string.IsNullOrEmpty(cycle.RestorationReason))
+                                                {
+                                                    <div class="timeline-reason">
+                                                        <strong>Reason:</strong> @cycle.RestorationReason
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        @if (cycle.RestorationApprovedAt.HasValue)
+                                        {
+                                            <!-- Restoration Approved -->
+                                            <div class="timeline-event restoration-event">
+                                                <div class="timeline-marker restoration-marker">
+                                                    <i class="bi bi-check-circle"></i>
+                                                </div>
+                                                <div class="timeline-content">
+                                                    <div class="timeline-title">Restoration Approved</div>
+                                                    <div class="timeline-meta">
+                                                        <i class="bi bi-person me-1"></i>@cycle.RestorationApprovedBy
+                                                        <i class="bi bi-calendar ms-3 me-1"></i>@cycle.RestorationApprovedAt.Value.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss")
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal-cancel" @onclick="CloseHistoryModal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+@if (showRestoreModal)
+{
+    <div class="modal modal-modern show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-arrow-counterclockwise me-2"></i>Restore Service</h5>
+                    <button type="button" class="btn-close" @onclick="CloseRestoreModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (isLoadingEligibility)
+                    {
+                        <div class="text-center p-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Checking eligibility...</span>
+                            </div>
+                            <p class="mt-3" style="color: #64748b;">Checking restoration eligibility...</p>
+                        </div>
+                    }
+                    else if (!isEligible)
+                    {
+                        <div class="alert-modern-danger">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>Not Eligible:</strong> @eligibilityReason
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert-modern-success mb-3">
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                            <strong>Eligible for @restorationType Restore</strong>
+                            @if (daysUntilExpiration.HasValue && daysUntilExpiration.Value > 0)
+                            {
+                                <br />
+                                <small>Quick Restore window expires in @daysUntilExpiration days</small>
+                            }
+                        </div>
+
+                        @if (restorationType == "Full")
+                        {
+                            <div class="alert-modern-warning mb-3">
+                                <i class="bi bi-info-circle-fill me-2"></i>
+                                <strong>Full Restore Requirements:</strong>
+                                <ul class="mb-0 mt-2" style="padding-left: 1.25rem;">
+                                    <li>Service has sent 10+ consecutive healthy heartbeats ✓</li>
+                                    <li>Detailed justification required (50+ characters)</li>
+                                    <li>Service owner authorization verification required</li>
+                                    <li>Service endpoints validation required</li>
+                                </ul>
+                            </div>
+                        }
+
+                        <div class="mb-3">
+                            <label class="form-label">Restoration Reason (Required - minimum 10 characters)</label>
+                            <textarea class="form-control" 
+                                      rows="3" 
+                                      @bind="restorationReason" 
+                                      required 
+                                      placeholder="Explain why this service should be restored..."></textarea>
+                            <small class="form-text" style="display: block; margin-top: 0.25rem; color: @(restorationReason.Length >= 10 ? "#16a34a" : "#94a3b8");">
+                                @restorationReason.Length / 10 characters minimum
+                            </small>
+                        </div>
+
+                        @if (restorationType == "Full")
+                        {
+                            <div class="mb-3">
+                                <label class="form-label">Detailed Justification (Required for Full Restore - minimum 50 characters)</label>
+                                <textarea class="form-control" 
+                                          rows="4" 
+                                          @bind="restorationJustification" 
+                                          required 
+                                          placeholder="Explain why restoration is needed after this extended deletion period. Include any security reviews, compliance checks, or owner confirmation details..."></textarea>
+                                <small class="form-text" style="display: block; margin-top: 0.25rem; color: @(restorationJustification.Length >= 50 ? "#16a34a" : "#94a3b8");">
+                                    @restorationJustification.Length / 50 characters minimum
+                                </small>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="ownerVerifiedCheck" @bind="ownerVerified">
+                                    <label class="form-check-label" for="ownerVerifiedCheck">
+                                        <strong>I have verified the service owner is authorized</strong>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="endpointsVerifiedCheck" @bind="endpointsVerified">
+                                    <label class="form-check-label" for="endpointsVerifiedCheck">
+                                        <strong>I have confirmed service endpoints are still valid</strong>
+                                    </label>
+                                </div>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert-modern-danger">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal-cancel" @onclick="CloseRestoreModal" disabled="@(isProcessingRestore || isLoadingEligibility)">Cancel</button>
+                    @if (isEligible)
+                    {
+                        <button type="button" class="btn-approve-modern" @onclick="RestoreService" disabled="@(isProcessingRestore || isLoadingEligibility)">
+                            @if (isProcessingRestore)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                <span>Restoring...</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>
+                                <span>Restore Service</span>
+                            }
+                        </button>
+                    }
                 </div>
             </div>
         </div>
@@ -267,13 +890,25 @@
 
 @code {
     private List<RegistrationRequest>? registrations;
+    private List<Service>? deletionRequests;
+    private List<Service>? deletedServices;
     private string activeTab = "pending";
     private bool showApprovalModal = false;
     private bool showDenialModal = false;
+    private bool showDeletionApprovalModal = false;
+    private bool showBulkApprovalModal = false;
+    private bool isProcessingApproval = false;
+    private bool isProcessingDeletion = false;
+    private bool isProcessingBulkApproval = false;
     private string? errorMessage = null;
     private Guid selectedRegistrationId;
+    private Guid selectedServiceId;
     private string approvalComments = "";
     private string denialReason = "";
+    private string deletionReason = "";
+    private string bulkApprovalComments = "";
+    private string bulkApprovalResultMessage = "";
+    private bool bulkApprovalSuccess = false;
 
     private List<RegistrationRequest> pendingRegistrations => 
         registrations?.Where(r => r.Status == RegistrationStatus.Pending).ToList() ?? new List<RegistrationRequest>();
@@ -283,18 +918,28 @@
     
     private int pendingCount => pendingRegistrations.Count;
     private int deniedCount => deniedRegistrations.Count;
+    private int deletionCount => deletionRequests?.Count ?? 0;
+    private int deletedHistoryCount => deletedServices?.Count ?? 0;
 
-    private void SwitchTab(string tab)
+    private async Task SwitchTab(string tab)
     {
         activeTab = tab;
+        if (tab == "deletions")
+        {
+            await LoadDeletionRequests();
+        }
+        else if (tab == "deleted-history")
+        {
+            await LoadDeletedServices();
+        }
         StateHasChanged();
     }
 
     protected override async Task OnInitializedAsync()
     {
         Logger.LogInformation("PendingApprovals page initialized");
-        Console.WriteLine("PendingApprovals page initialized");
         await LoadRegistrations();
+        await LoadDeletionRequests();
         
         // Subscribe to SignalR events
         HubClient.OnRegistrationApproved(async (registrationId, serviceId) =>
@@ -337,15 +982,26 @@
         registrations = await ApiClient.GetAllRegistrationsAsync();
     }
 
+    private async Task LoadDeletionRequests()
+    {
+        deletionRequests = await ApiClient.GetPendingDeletionsAsync();
+    }
+
+    private async Task LoadDeletedServices()
+    {
+        deletedServices = await ApiClient.GetDeletedServicesAsync();
+    }
+
     private async Task RefreshRegistrations()
     {
         await LoadRegistrations();
+        await LoadDeletionRequests();
+        await LoadDeletedServices();
     }
 
     private void ShowApprovalModal(Guid registrationId)
     {
         Logger.LogInformation("ShowApprovalModal called for {RegistrationId}", registrationId);
-        Console.WriteLine($"ShowApprovalModal called for {registrationId}");
         selectedRegistrationId = registrationId;
         approvalComments = "";
         errorMessage = null;
@@ -363,24 +1019,115 @@
         StateHasChanged(); // Force UI update to show modal
     }
 
+    private void ShowDeletionApprovalModal(Guid serviceId)
+    {
+        Logger.LogInformation("ShowDeletionApprovalModal called for {ServiceId}", serviceId);
+        deletionReason = "";
+        selectedServiceId = serviceId;
+        errorMessage = null;
+        showDeletionApprovalModal = true;
+        StateHasChanged();
+    }
+
     private void CloseModals()
     {
         Logger.LogInformation("CloseModals called");
         showApprovalModal = false;
         showDenialModal = false;
+        showDeletionApprovalModal = false;
+        showBulkApprovalModal = false;
+        isProcessingApproval = false;
+        isProcessingDeletion = false;
+        isProcessingBulkApproval = false;
+        bulkApprovalResultMessage = "";
+        bulkApprovalSuccess = false;
+    }
+
+    private void ShowBulkApprovalModal()
+    {
+        Logger.LogInformation("ShowBulkApprovalModal called for {Count} registrations", pendingRegistrations.Count);
+        bulkApprovalComments = "Bulk approved by admin";
+        errorMessage = null;
+        bulkApprovalResultMessage = "";
+        bulkApprovalSuccess = false;
+        showBulkApprovalModal = true;
+        StateHasChanged();
+    }
+
+    private async Task ApproveAllRegistrations()
+    {
+        if (pendingRegistrations == null || pendingRegistrations.Count == 0)
+        {
+            errorMessage = "No registrations to approve";
+            return;
+        }
+        
+        isProcessingBulkApproval = true;
+        errorMessage = null;
+        bulkApprovalResultMessage = "";
+        StateHasChanged();
+        
+        try
+        {
+            Logger.LogInformation("Attempting to approve {Count} registrations", pendingRegistrations.Count);
+            
+            List<Guid> registrationIds = pendingRegistrations.Select(r => r.RegistrationId).ToList();
+            
+            (bool success, int successCount, int failureCount, string? errorMsg) = 
+                await ApiClient.ApproveAllRegistrationsAsync(
+                    registrationIds, 
+                    "dashboard-admin", 
+                    bulkApprovalComments);
+            
+            if (success)
+            {
+                bulkApprovalSuccess = true;
+                bulkApprovalResultMessage = $"Successfully approved {successCount} registration(s).";
+                
+                if (failureCount > 0)
+                {
+                    bulkApprovalResultMessage += $" {failureCount} failed.";
+                }
+                
+                Logger.LogInformation("Bulk approval completed: {SuccessCount} successful, {FailureCount} failed", 
+                    successCount, failureCount);
+                
+                // Wait 2 seconds to show the result, then close modal and refresh
+                await Task.Delay(2000);
+                showBulkApprovalModal = false;
+                await LoadRegistrations();
+            }
+            else
+            {
+                bulkApprovalSuccess = false;
+                bulkApprovalResultMessage = errorMsg ?? "Failed to approve registrations";
+                Logger.LogError("Bulk approval failed: {Error}", errorMsg);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Exception during bulk approval");
+            bulkApprovalSuccess = false;
+            bulkApprovalResultMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isProcessingBulkApproval = false;
+            StateHasChanged();
+        }
     }
 
     private async Task ApproveRegistration()
     {
         Logger.LogInformation("ApproveRegistration called for {RegistrationId}", selectedRegistrationId);
-        Console.WriteLine($"ApproveRegistration called for {selectedRegistrationId}");
+        
+        isProcessingApproval = true;
+        StateHasChanged();
         
         try
         {
             errorMessage = null;
             bool success = await ApiClient.ApproveRegistrationAsync(selectedRegistrationId, "dashboard-admin", approvalComments);
-            
-            Console.WriteLine($"Approval result: {success}");
             
             if (success)
             {
@@ -391,13 +1138,14 @@
             else
             {
                 errorMessage = "Failed to approve registration. Please try again.";
+                isProcessingApproval = false;
                 StateHasChanged(); // Force error message to display
             }
         }
         catch (Exception ex)
         {
             errorMessage = $"Error approving registration: {ex.Message}";
-            Console.WriteLine($"Error approving registration: {ex.Message}");
+            isProcessingApproval = false;
             StateHasChanged(); // Force error message to display
         }
     }
@@ -419,6 +1167,9 @@
             return;
         }
 
+        isProcessingApproval = true;
+        StateHasChanged();
+        
         try
         {
             (bool success, string? error) = await ApiClient.DenyRegistrationAsync(selectedRegistrationId, "dashboard-admin", denialReason);
@@ -433,15 +1184,234 @@
             }
             else
             {
-                Console.WriteLine($"Failed to deny registration {selectedRegistrationId}: {error}");
                 errorMessage = error ?? "Failed to deny registration. Please try again.";
+                isProcessingApproval = false;
                 StateHasChanged();
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error denying registration: {ex.Message}");
             errorMessage = $"Error: {ex.Message}";
+            isProcessingApproval = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ApproveDeletion()
+    {
+        Logger.LogInformation("ApproveDeletion called for {ServiceId}", selectedServiceId);
+        
+        if (deletionReason.Length < 10)
+        {
+            errorMessage = "Reason must be at least 10 characters long.";
+            StateHasChanged();
+            return;
+        }
+        
+        isProcessingDeletion = true;
+        StateHasChanged();
+        
+        try
+        {
+            errorMessage = null;
+            bool success = await ApiClient.ApproveDeletionAsync(selectedServiceId, "dashboard-admin", deletionReason);
+            
+            if (success)
+            {
+                CloseModals();
+                await LoadDeletionRequests();
+                await LoadDeletedServices();
+                StateHasChanged();
+            }
+            else
+            {
+                errorMessage = "Failed to approve deletion. Please try again.";
+                isProcessingDeletion = false;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error approving deletion for service {ServiceId}", selectedServiceId);
+            errorMessage = $"Error: {ex.Message}";
+            isProcessingDeletion = false;
+            StateHasChanged();
+        }
+    }
+
+    // History and Restoration Modal State
+    private bool showHistoryModal = false;
+    private bool showRestoreModal = false;
+    private Guid selectedHistoryServiceId = Guid.Empty;
+    private List<ServiceDeletionCycleDto>? deletionCycles = null;
+    private bool isLoadingHistory = false;
+    private bool isLoadingEligibility = false;
+    private bool isEligible = false;
+    private string? eligibilityReason = null;
+    private string? restorationType = null;
+    private int? daysUntilExpiration = null;
+    private string restorationReason = "";
+    private string restorationJustification = "";
+    private bool ownerVerified = false;
+    private bool endpointsVerified = false;
+    private bool isProcessingRestore = false;
+
+    private async Task ShowRestoreModalForService(Guid serviceId)
+    {
+        Logger.LogInformation("ShowRestoreModalForService called for {ServiceId}", serviceId);
+        selectedServiceId = serviceId;
+        restorationReason = "";
+        errorMessage = null;
+        isLoadingEligibility = true;
+        StateHasChanged();
+
+        try
+        {
+            (isEligible, eligibilityReason, restorationType, daysUntilExpiration) = 
+                await ApiClient.GetRestorationEligibilityAsync(serviceId);
+            
+            Logger.LogInformation(
+                "Eligibility check for {ServiceId}: Eligible={Eligible}, Type={Type}, Days={Days}, Reason={Reason}",
+                serviceId, isEligible, restorationType, daysUntilExpiration, eligibilityReason);
+
+            isLoadingEligibility = false;
+            showRestoreModal = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error checking restoration eligibility for {ServiceId}", serviceId);
+            errorMessage = $"Error checking eligibility: {ex.Message}";
+            isLoadingEligibility = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ShowHistoryModal(Guid serviceId)
+    {
+        Logger.LogInformation("ShowHistoryModal called for {ServiceId}", serviceId);
+        selectedHistoryServiceId = serviceId;
+        showHistoryModal = true;
+        isLoadingHistory = true;
+        StateHasChanged();
+
+        try
+        {
+            deletionCycles = await ApiClient.GetDeletionCyclesAsync(serviceId);
+            Logger.LogInformation("Loaded {Count} deletion cycles for service {ServiceId}", deletionCycles?.Count ?? 0, serviceId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading deletion cycles for {ServiceId}", serviceId);
+            deletionCycles = new List<ServiceDeletionCycleDto>();
+        }
+        finally
+        {
+            isLoadingHistory = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CloseHistoryModal()
+    {
+        Logger.LogInformation("CloseHistoryModal called");
+        showHistoryModal = false;
+        selectedHistoryServiceId = Guid.Empty;
+        deletionCycles = null;
+    }
+
+    private void CloseRestoreModal()
+    {
+        Logger.LogInformation("CloseRestoreModal called");
+        showRestoreModal = false;
+        isProcessingRestore = false;
+        restorationReason = "";
+        restorationJustification = "";
+        ownerVerified = false;
+        endpointsVerified = false;
+        errorMessage = null;
+    }
+
+    private async Task RestoreService()
+    {
+        Logger.LogInformation("RestoreService called for {ServiceId}, Type={Type}", selectedServiceId, restorationType);
+        
+        if (restorationReason.Length < 10)
+        {
+            errorMessage = "Restoration reason must be at least 10 characters long.";
+            StateHasChanged();
+            return;
+        }
+        
+        // Additional validation for Full Restore
+        if (restorationType == "Full")
+        {
+            if (restorationJustification.Length < 50)
+            {
+                errorMessage = "Justification must be at least 50 characters for Full Restore.";
+                StateHasChanged();
+                return;
+            }
+            
+            if (!ownerVerified)
+            {
+                errorMessage = "You must verify that the service owner is authorized.";
+                StateHasChanged();
+                return;
+            }
+            
+            if (!endpointsVerified)
+            {
+                errorMessage = "You must confirm that service endpoints are still valid.";
+                StateHasChanged();
+                return;
+            }
+        }
+
+        isProcessingRestore = true;
+        StateHasChanged();
+
+        try
+        {
+            errorMessage = null;
+            bool success = false;
+
+            if (restorationType == "Quick")
+            {
+                success = await ApiClient.RestoreServiceQuicklyAsync(
+                    selectedServiceId, 
+                    "dashboard-admin", 
+                    restorationReason);
+            }
+            else if (restorationType == "Full")
+            {
+                success = await ApiClient.RestoreServiceFullyAsync(
+                    selectedServiceId, 
+                    "dashboard-admin", 
+                    restorationReason,
+                    restorationJustification,
+                    ownerVerified,
+                    endpointsVerified);
+            }
+
+            if (success)
+            {
+                CloseRestoreModal();
+                await LoadDeletedServices();
+                StateHasChanged();
+            }
+            else
+            {
+                errorMessage = "Failed to restore service. Please try again.";
+                isProcessingRestore = false;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error restoring service {ServiceId}", selectedServiceId);
+            errorMessage = $"Error: {ex.Message}";
+            isProcessingRestore = false;
             StateHasChanged();
         }
     }

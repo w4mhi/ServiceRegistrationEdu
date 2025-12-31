@@ -54,11 +54,12 @@ public class HeartbeatService : IHeartbeatService
             throw new InvalidOperationException($"Service {serviceId} not found");
         }
         
-        // Validate service is approved (only approved services can send heartbeats)
-        if (service.DeletionStatus != DeletionStatus.Active)
+        // Allow deleted services to send heartbeats (for restoration eligibility)
+        // Only block PendingDeletion services
+        if (service.DeletionStatus == DeletionStatus.PendingDeletion)
         {
-            logger?.LogWarning("Heartbeat received for deleted/pending deletion service {ServiceId}", serviceId);
-            throw new InvalidOperationException($"Service {serviceId} is not active");
+            logger?.LogWarning("Heartbeat received for pending deletion service {ServiceId}", serviceId);
+            throw new InvalidOperationException($"Service {serviceId} is pending deletion and cannot send heartbeats");
         }
         
         // Get or create in-memory state for health status calculation
@@ -110,6 +111,20 @@ public class HeartbeatService : IHeartbeatService
         service.LastHeartbeatTimestamp = currentTimestamp;
         service.HeartbeatCount++;
         service.MissedHeartbeatCounter = 0; // Reset missed counter on heartbeat
+        
+        // Track consecutive healthy heartbeats for deleted services (restoration eligibility)
+        if (service.DeletionStatus == DeletionStatus.Deleted)
+        {
+            service.ConsecutiveHealthyHeartbeats++;
+            logger?.LogInformation(
+                "Deleted service {ServiceId} heartbeat tracked: {Count} consecutive healthy heartbeats",
+                serviceId, service.ConsecutiveHealthyHeartbeats);
+        }
+        else
+        {
+            // Active services don't need this counter
+            service.ConsecutiveHealthyHeartbeats = 0;
+        }
         
         await serviceRepository.UpdateAsync(service);
         

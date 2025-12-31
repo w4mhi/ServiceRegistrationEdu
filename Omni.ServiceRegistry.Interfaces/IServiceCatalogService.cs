@@ -34,6 +34,11 @@ public interface IServiceCatalogService
     Task<List<Service>> GetByHealthStatusAsync(HealthStatus status);
     
     /// <summary>
+    /// Get services by deletion status
+    /// </summary>
+    Task<List<Service>> GetServicesByDeletionStatusAsync(DeletionStatus status);
+    
+    /// <summary>
     /// Get service details by ID (R18)
     /// </summary>
     Task<Service?> GetServiceByIdAsync(Guid serviceId);

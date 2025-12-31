@@ -4,14 +4,16 @@
 @inject SignalRHubClient HubClient
 @inject NavigationManager Navigation
 @implements IAsyncDisposable
+@using Omni.ServiceRegistry.Dashboard.DTOs
 
 <PageTitle>Service Registry - Monitoring Dashboard</PageTitle>
 
-<div class="page-header-modern mb-4">
-    <div>
-        <h1 class="page-title-modern mb-2">📊 Service Registry Dashboard</h1>
-        <p class="text-muted" style="font-size: 1.1rem;">Real-time monitoring of registered services</p>
-    </div>
+<div class="page-header-modern">
+    <h1 class="page-title-modern">📊 Service Registry Dashboard</h1>
+    <button class="btn-refresh-top" @onclick="RefreshServices">
+        <i class="bi bi-arrow-clockwise"></i>
+        <span>Refresh</span>
+    </button>
 </div>
 
 <!-- Health Overview Cards -->
@@ -78,10 +80,6 @@
     <div class="count-badge">
         @(services != null ? filteredServices.Count : 0) of @(services?.Count ?? 0)
     </div>
-    <button class="btn-refresh-top" @onclick="RefreshServices">
-        <i class="bi bi-arrow-clockwise"></i>
-        <span>Refresh</span>
-    </button>
 </div>
 
 <!-- Services Table -->
@@ -109,7 +107,7 @@
         else
         {
             <div class="table-responsive">
-                <table class="table table-hover table-modern mb-0">
+                <table class="table table-hover table-modern-approvals mb-0">
                     <thead>
                         <tr>
                             <th class="ps-4">Service</th>
@@ -123,10 +121,31 @@
                     <tbody>
                         @foreach (Service service in filteredServices)
                         {
-                            <tr class="service-row-modern">
+                            <tr class="registration-row-modern">
                                 <td class="ps-4">
-                                    <div class="service-name-modern">@service.ServiceName</div>
-                                    <small style="color: #64748b;">@service.ContactEmail</small>
+                                    @if (service.DeletionStatus == DeletionStatus.PendingDeletion)
+                                    {
+                                        <div class="service-name-modern" style="color: #dc2626; font-weight: 700;">
+                                            <i class="bi bi-exclamation-triangle-fill me-2"></i>@service.ServiceName
+                                        </div>
+                                        <small style="color: #ef4444; font-weight: 600;">⚠️ Pending to delete</small>
+                                    }
+                                    else
+                                    {
+                                        <div class="service-name-modern">@service.ServiceName</div>
+                                        <small style="color: #64748b;">
+                                            @if (recentlyRestoredMap.ContainsKey(service.ServiceId))
+                                            {
+                                                RecentlyRestoredServiceDto restored = recentlyRestoredMap[service.ServiceId];
+                                                <span class="restoration-badge-inline restoration-badge-@restored.RestorationMethod.ToLower()" 
+                                                      title="Restored @restored.DaysAgo day(s) ago via @restored.RestorationMethod restore. Badge expires in @restored.BadgeExpiresIn day(s).">
+                                                    <i class="bi bi-arrow-counterclockwise"></i> Recently Restored (@restored.RestorationMethod)
+                                                </span>
+                                                <br />
+                                            }
+                                            @service.ContactEmail
+                                        </small>
+                                    }
                                 </td>
                                 <td>
                                     <div class="d-flex align-items-center">
@@ -169,9 +188,19 @@
                                     }
                                 </td>
                                 <td class="text-center">
-                                    <button class="btn-details-modern" @onclick="() => ViewDetails(service.ServiceId)">
+                                    <button class="btn-details-modern" style="margin-right: 0.75rem;" @onclick="() => ViewDetails(service.ServiceId)">
                                         <i class="bi bi-info-circle me-1"></i>Details
                                     </button>
+                                    @if (service.DeletionStatus == DeletionStatus.Active)
+                                    {
+                                        <button class="btn-deny-modern" @onclick="() => RequestDeletionDirectly(service.ServiceId)">
+                                            <i class="bi bi-trash me-1"></i>Delete
+                                        </button>
+                                    }
+                                    else if (service.DeletionStatus == DeletionStatus.PendingDeletion)
+                                    {
+                                        <span class="badge bg-danger">Pending Deletion</span>
+                                    }
                                 </td>
                             </tr>
                         }
@@ -185,12 +214,14 @@
 @code {
     private List<Service>? services;
     private List<Service> filteredServices = new();
+    private Dictionary<Guid, RecentlyRestoredServiceDto> recentlyRestoredMap = new();
     private string statusFilter = "";
     private System.Threading.Timer? refreshTimer;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadServices();
+        await LoadRecentlyRestoredServices();
         
         HubClient.OnHealthStatusChanged(async (serviceId, serviceName, previousStatus, newStatus) =>
         {
@@ -239,13 +270,22 @@
 
     private async Task LoadServices()
     {
-        services = await ApiClient.GetAllServicesAsync();
+        List<Service> allServices = await ApiClient.GetAllServicesAsync();
+        // Filter out deleted services (soft delete)
+        services = allServices.Where(s => s.DeletionStatus != DeletionStatus.Deleted).ToList();
         ApplyFilter();
+    }
+
+    private async Task LoadRecentlyRestoredServices()
+    {
+        List<RecentlyRestoredServiceDto> restored = await ApiClient.GetRecentlyRestoredServicesAsync();
+        recentlyRestoredMap = restored.ToDictionary(r => r.ServiceId);
     }
 
     private async Task RefreshServices()
     {
         await LoadServices();
+        await LoadRecentlyRestoredServices();
     }
 
     private void ApplyFilter()
@@ -276,6 +316,29 @@
     private void ViewDetails(Guid serviceId)
     {
         Navigation.NavigateTo($"/service/{serviceId}");
+    }
+
+    private async Task RequestDeletionDirectly(Guid serviceId)
+    {
+        // Request deletion without modal - use default reason
+        try
+        {
+            bool success = await ApiClient.RequestDeletionAsync(
+                serviceId, 
+                "dashboard-user", 
+                "Service deletion requested from dashboard",
+                null);
+            
+            if (success)
+            {
+                await LoadServices();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error requesting deletion: {ex.Message}");
+        }
     }
 
     private string GetRelativeTime(DateTime timestamp)

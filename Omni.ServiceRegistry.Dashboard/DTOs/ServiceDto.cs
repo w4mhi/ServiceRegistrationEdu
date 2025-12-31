@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Omni.ServiceRegistry.Models;
 
 namespace Omni.ServiceRegistry.Dashboard.DTOs;
 
@@ -21,4 +22,8 @@ public class ServiceDto
     public long HeartbeatCount { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public DeletionStatus DeletionStatus { get; set; } = DeletionStatus.Active;
+    public string? DeletionReason { get; set; }
+    public string? DeletionApprovedBy { get; set; }
+    public DateTime? DeletionApprovedAt { get; set; }
 }

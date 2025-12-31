@@ -87,6 +87,53 @@ public class ServiceRegistryApiClient
 #pragma warning restore CA1031
     }
 
+    public async Task<(bool Success, int SuccessCount, int FailureCount, string? ErrorMessage)> ApproveAllRegistrationsAsync(
+        List<Guid> registrationIds, 
+        string approvedBy, 
+        string? comments)
+    {
+        try
+        {
+            logger.LogInformation("Attempting to approve {Count} registrations in bulk", registrationIds.Count);
+            
+            HttpResponseMessage response = await httpClient.PostAsJsonAsync(
+                "/api/v1/admin/registrations/approve-all",
+                new 
+                { 
+                    RegistrationIds = registrationIds, 
+                    ApprovedBy = approvedBy, 
+                    Comments = comments 
+                });
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                string content = await response.Content.ReadAsStringAsync();
+                logger.LogError("Bulk approval failed: {StatusCode} - {Content}", response.StatusCode, content);
+                return (false, 0, 0, $"Bulk approval failed: {response.StatusCode}");
+            }
+            
+            BulkApprovalResponseDto? result = await response.Content.ReadFromJsonAsync<BulkApprovalResponseDto>();
+            
+            if (result == null)
+            {
+                return (false, 0, 0, "Invalid response from server");
+            }
+            
+            logger.LogInformation(
+                "Bulk approval completed: {SuccessCount} successful, {FailureCount} failed",
+                result.SuccessCount, result.FailureCount);
+            
+            return (true, result.SuccessCount, result.FailureCount, null);
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to approve registrations in bulk");
+            return (false, 0, 0, ex.Message);
+        }
+#pragma warning restore CA1031
+    }
+
     public async Task<(bool Success, string? ErrorMessage)> DenyRegistrationAsync(Guid registrationId, string deniedBy, string comments)
     {
         try
@@ -202,9 +249,11 @@ public class ServiceRegistryApiClient
     {
         try
         {
-            List<Service>? result = await httpClient.GetFromJsonAsync<List<Service>>(
+            List<ServiceDto>? dtos = await httpClient.GetFromJsonAsync<List<ServiceDto>>(
                 "/api/v1/admin/deletions/pending");
-            return result ?? new List<Service>();
+            if (dtos == null) return new List<Service>();
+            
+            return dtos.Select(dto => ConvertDtoToService(dto)).ToList();
         }
 #pragma warning disable CA1031
         catch (Exception ex)
@@ -215,13 +264,32 @@ public class ServiceRegistryApiClient
 #pragma warning restore CA1031
     }
 
-    public async Task<bool> RequestDeletionAsync(Guid serviceId, string requestedBy, string reason)
+    public async Task<List<Service>> GetDeletedServicesAsync()
+    {
+        try
+        {
+            // Get deleted services from admin history endpoint
+            List<ServiceDto>? dtos = await httpClient.GetFromJsonAsync<List<ServiceDto>>("/api/v1/admin/deletions/history");
+            if (dtos == null) return new List<Service>();
+            
+            return dtos.Select(dto => ConvertDtoToService(dto)).ToList();
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to get deleted services from API");
+            return new List<Service>();
+        }
+#pragma warning restore CA1031
+    }
+
+    public async Task<bool> RequestDeletionAsync(Guid serviceId, string requestedBy, string reason, string? comments = null)
     {
         try
         {
             HttpResponseMessage response = await httpClient.PostAsJsonAsync(
-                $"/api/v1/delete/{serviceId}",
-                new { requestedBy, reason });
+                $"/api/v1/admin/services/{serviceId}/delete",
+                new { Reason = reason, Comments = comments });
             return response.IsSuccessStatusCode;
         }
 #pragma warning disable CA1031
@@ -233,13 +301,13 @@ public class ServiceRegistryApiClient
 #pragma warning restore CA1031
     }
 
-    public async Task<bool> ApproveDeletionAsync(Guid serviceId, string approvedBy, string? comments)
+    public async Task<bool> ApproveDeletionAsync(Guid serviceId, string approvedBy, string? reason)
     {
         try
         {
             HttpResponseMessage response = await httpClient.PostAsJsonAsync(
                 $"/api/v1/admin/deletions/{serviceId}/approve",
-                new { approvedBy, comments });
+                new { Reason = reason });
             return response.IsSuccessStatusCode;
         }
 #pragma warning disable CA1031
@@ -247,6 +315,111 @@ public class ServiceRegistryApiClient
         {
             logger.LogError(ex, "Failed to approve deletion for service {ServiceId}", serviceId);
             return false;
+        }
+#pragma warning restore CA1031
+    }
+    
+    public async Task<(bool IsEligible, string? Reason, string? RestorationType, int? DaysUntilExpiration)> GetRestorationEligibilityAsync(Guid serviceId)
+    {
+        try
+        {
+            HttpResponseMessage response = await httpClient.GetAsync($"/api/v1/admin/services/{serviceId}/restoration-eligibility");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                using JsonDocument doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+                JsonElement root = doc.RootElement;
+                
+                bool isEligible = root.GetProperty("isEligible").GetBoolean();
+                
+                string? reason = root.TryGetProperty("reason", out JsonElement reasonElement) && reasonElement.ValueKind != JsonValueKind.Null
+                    ? reasonElement.GetString()
+                    : null;
+                    
+                string? restorationType = root.TryGetProperty("restorationType", out JsonElement typeElement) && typeElement.ValueKind != JsonValueKind.Null
+                    ? typeElement.GetString()
+                    : null;
+                    
+                int? daysUntilExpiration = root.TryGetProperty("daysUntilExpiration", out JsonElement daysElement) && daysElement.ValueKind != JsonValueKind.Null
+                    ? daysElement.GetInt32()
+                    : null;
+                
+                return (isEligible, reason, restorationType, daysUntilExpiration);
+            }
+            
+            return (false, "Unable to check eligibility", null, null);
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to check restoration eligibility for service {ServiceId}", serviceId);
+            return (false, $"Error: {ex.Message}", null, null);
+        }
+#pragma warning restore CA1031
+    }
+    
+    public async Task<bool> RestoreServiceQuicklyAsync(Guid serviceId, string restoredBy, string reason)
+    {
+        try
+        {
+            HttpResponseMessage response = await httpClient.PostAsJsonAsync(
+                $"/api/v1/admin/services/{serviceId}/quick-restore",
+                new { RestoredBy = restoredBy, Reason = reason });
+            return response.IsSuccessStatusCode;
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to quick restore service {ServiceId}", serviceId);
+            return false;
+        }
+#pragma warning restore CA1031
+    }
+    
+    public async Task<bool> RestoreServiceFullyAsync(
+        Guid serviceId, 
+        string restoredBy, 
+        string reason, 
+        string? justification = null,
+        bool ownerVerified = false,
+        bool endpointsVerified = false)
+    {
+        try
+        {
+            HttpResponseMessage response = await httpClient.PostAsJsonAsync(
+                $"/api/v1/admin/services/{serviceId}/restore",
+                new 
+                { 
+                    RestoredBy = restoredBy, 
+                    Reason = reason,
+                    Justification = justification,
+                    OwnerVerified = ownerVerified,
+                    EndpointsVerified = endpointsVerified
+                });
+            return response.IsSuccessStatusCode;
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to restore service {ServiceId}", serviceId);
+            return false;
+        }
+#pragma warning restore CA1031
+    }
+
+    public async Task<List<ServiceDeletionCycleDto>> GetDeletionCyclesAsync(Guid serviceId)
+    {
+        try
+        {
+            List<ServiceDeletionCycleDto>? cycles = await httpClient.GetFromJsonAsync<List<ServiceDeletionCycleDto>>(
+                $"/api/v1/admin/services/{serviceId}/deletion-cycles");
+            return cycles ?? new List<ServiceDeletionCycleDto>();
+        }
+#pragma warning disable CA1031 // Dashboard API client returns empty/default for all errors
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to get deletion cycles for service {ServiceId}", serviceId);
+            return new List<ServiceDeletionCycleDto>();
         }
 #pragma warning restore CA1031
     }
@@ -290,8 +463,11 @@ public class ServiceRegistryApiClient
             HeartbeatCount = dto.HeartbeatCount,
             CreatedAt = dto.CreatedAt,
             ServiceNameNormalized = string.Empty, // Not needed for display
-            DeletionStatus = DeletionStatus.Active,
-            UpdatedAt = dto.CreatedAt
+            DeletionStatus = dto.DeletionStatus,
+            UpdatedAt = dto.UpdatedAt,
+            DeletionReason = dto.DeletionReason,
+            DeletionApprovedBy = dto.DeletionApprovedBy,
+            DeletionApprovedAt = dto.DeletionApprovedAt
         };
     }
 
@@ -315,5 +491,23 @@ public class ServiceRegistryApiClient
             DeletionStatus = DeletionStatus.Active,
             UpdatedAt = dto.UpdatedAt
         };
+    }
+
+    // Recently Restored Services endpoint
+    public async Task<List<RecentlyRestoredServiceDto>> GetRecentlyRestoredServicesAsync()
+    {
+        try
+        {
+            List<RecentlyRestoredServiceDto>? dtos = await httpClient.GetFromJsonAsync<List<RecentlyRestoredServiceDto>>(
+                "/api/v1/admin/services/recently-restored");
+            return dtos ?? new List<RecentlyRestoredServiceDto>();
+        }
+#pragma warning disable CA1031 // Dashboard API client returns empty/default for all errors
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to get recently restored services from API");
+            return new List<RecentlyRestoredServiceDto>();
+        }
+#pragma warning restore CA1031
     }
 }

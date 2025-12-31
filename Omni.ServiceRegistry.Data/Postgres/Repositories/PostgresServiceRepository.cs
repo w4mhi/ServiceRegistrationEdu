@@ -25,6 +25,7 @@ public class PostgresServiceRepository : IServiceRepository
     public async Task<Service?> GetByIdAsync(Guid serviceId)
     {
         return await context.Services
+            .IgnoreQueryFilters()
             .FirstOrDefaultAsync(s => s.ServiceId == serviceId);
     }
 

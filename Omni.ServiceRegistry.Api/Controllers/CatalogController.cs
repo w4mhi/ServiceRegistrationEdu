@@ -76,7 +76,9 @@ public class CatalogController : ControllerBase
             MaxMissedHeartbeats = s.MaxMissedHeartbeats,
             MissedHeartbeatCounter = s.MissedHeartbeatCounter,
             HeartbeatCount = s.HeartbeatCount,
-            CreatedAt = s.CreatedAt
+            CreatedAt = s.CreatedAt,
+            UpdatedAt = s.UpdatedAt,
+            DeletionStatus = s.DeletionStatus
         }).ToList();
 
         logger.LogInformation(

@@ -21,6 +21,7 @@ using Omni.ServiceRegistry.Api.Services;
 using Omni.ServiceRegistry.Data.InMemory;
 using Omni.ServiceRegistry.Data.Postgres;
 using Omni.ServiceRegistry.Data.Postgres.Repositories;
+using Omni.ServiceRegistry.Data.Repositories;
 using Omni.ServiceRegistry.Interfaces;
 using Omni.ServiceRegistry.Services;
 using Scalar.AspNetCore;
@@ -59,19 +60,29 @@ builder.Services.AddRateLimiter(options =>
 {
     options.AddFixedWindowLimiter("heartbeat", config =>
     {
-        config.PermitLimit = 200;
-        config.Window = TimeSpan.FromSeconds(1);
+        config.PermitLimit = builder.Configuration.GetValue<int>("RateLimiting:Heartbeat:PermitLimit", 200);
+        config.Window = TimeSpan.FromSeconds(builder.Configuration.GetValue<int>("RateLimiting:Heartbeat:WindowSeconds", 1));
         config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        config.QueueLimit = 50;
+        config.QueueLimit = builder.Configuration.GetValue<int>("RateLimiting:Heartbeat:QueueLimit", 50);
     });
     
     options.AddSlidingWindowLimiter("registration", config =>
     {
-        config.PermitLimit = 10;
-        config.Window = TimeSpan.FromMinutes(1);
-        config.SegmentsPerWindow = 6;
+        config.PermitLimit = builder.Configuration.GetValue<int>("RateLimiting:Registration:PermitLimit", 10);
+        config.Window = TimeSpan.FromMinutes(builder.Configuration.GetValue<int>("RateLimiting:Registration:WindowMinutes", 1));
+        config.SegmentsPerWindow = builder.Configuration.GetValue<int>("RateLimiting:Registration:SegmentsPerWindow", 6);
         config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        config.QueueLimit = 5;
+        config.QueueLimit = builder.Configuration.GetValue<int>("RateLimiting:Registration:QueueLimit", 5);
+    });
+    
+    // Rate limiting for restoration endpoints
+    // Max 5 restorations per admin per hour (configurable)
+    options.AddFixedWindowLimiter("restoration", config =>
+    {
+        config.PermitLimit = builder.Configuration.GetValue<int>("RateLimiting:Restoration:PermitLimit", 5);
+        config.Window = TimeSpan.FromHours(builder.Configuration.GetValue<int>("RateLimiting:Restoration:WindowHours", 1));
+        config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        config.QueueLimit = builder.Configuration.GetValue<int>("RateLimiting:Restoration:QueueLimit", 2);
     });
 });
 
@@ -97,6 +108,7 @@ if (databaseProvider == "Postgres")
     builder.Services.AddScoped<IRegistrationRepository, PostgresRegistrationRepository>();
     builder.Services.AddScoped<IServiceRepository, PostgresServiceRepository>();
     builder.Services.AddScoped<IChangeHistoryRepository, PostgresChangeHistoryRepository>();
+    builder.Services.AddScoped<IDeletionCycleRepository, DeletionCycleRepository>();
 }
 else
 {
@@ -110,8 +122,9 @@ builder.Services.AddScoped<IAdministratorService, AdministratorService>();
 builder.Services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
 builder.Services.AddScoped<IHeartbeatService, HeartbeatService>();
 
-// Register background services - HeartbeatMonitorService creates its own scopes
+// Register background services - HeartbeatMonitorService and RestorationBadgeCleanupService create their own scopes
 builder.Services.AddHostedService<HeartbeatMonitorService>();
+builder.Services.AddHostedService<RestorationBadgeCleanupService>();
 
 WebApplication app = builder.Build();
 

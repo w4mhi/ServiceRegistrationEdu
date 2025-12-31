@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Omni.ServiceRegistry.Data.Postgres;
@@ -11,9 +12,11 @@ using Omni.ServiceRegistry.Data.Postgres;
 namespace Omni.ServiceRegistry.Data.Postgres.Migrations
 {
     [DbContext(typeof(ServiceRegistryDbContext))]
-    partial class ServiceRegistryDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251230150153_AddServiceDeletionCycleTracking")]
+    partial class AddServiceDeletionCycleTracking
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

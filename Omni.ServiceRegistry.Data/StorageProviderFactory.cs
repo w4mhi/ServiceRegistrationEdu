@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 using Microsoft.Extensions.Configuration;
 using Omni.ServiceRegistry.Interfaces;
+using StackExchange.Redis;
 
 namespace Omni.ServiceRegistry.Data;
 
@@ -56,8 +57,9 @@ public class StorageProviderFactory
 
     private IStorageProvider CreateRedisProvider(string connectionString)
     {
-        // Placeholder - will be implemented in Data.Redis project
-        throw new NotImplementedException("Redis provider not yet implemented");
+        // Create Redis connection
+        IConnectionMultiplexer redis = ConnectionMultiplexer.Connect(connectionString);
+        return new Redis.RedisStorageProvider(redis);
     }
 
     private IStorageProvider CreateSqlServerProvider(string connectionString)

@@ -22,6 +22,7 @@ public class ServiceRegistryDbContext : DbContext
     public DbSet<RegistrationRequest> RegistrationRequests => Set<RegistrationRequest>();
     public DbSet<Service> Services => Set<Service>();
     public DbSet<ServiceChangeHistory> ServiceChangeHistory => Set<ServiceChangeHistory>();
+    public DbSet<ServiceDeletionCycle> ServiceDeletionCycles => Set<ServiceDeletionCycle>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -114,6 +115,51 @@ public class ServiceRegistryDbContext : DbContext
             entity.Property(e => e.ChangedBy)
                 .IsRequired()
                 .HasMaxLength(255);
+        });
+        
+        // ServiceDeletionCycle configuration
+        modelBuilder.Entity<ServiceDeletionCycle>(entity =>
+        {
+            entity.HasKey(e => e.ServiceDeletionCycleId);
+            
+            entity.HasIndex(e => e.ServiceId);
+            entity.HasIndex(e => new { e.ServiceId, e.CycleNumber })
+                .IsUnique();
+            entity.HasIndex(e => e.DeletionApprovedAt);
+            entity.HasIndex(e => e.RestorationApprovedAt);
+            
+            entity.Property(e => e.DeletionRequestedBy)
+                .IsRequired()
+                .HasMaxLength(255);
+            
+            entity.Property(e => e.DeletionReason)
+                .IsRequired()
+                .HasMaxLength(1000);
+            
+            entity.Property(e => e.DeletionApprovedBy)
+                .HasMaxLength(255);
+            
+            entity.Property(e => e.RestorationRequestedBy)
+                .HasMaxLength(255);
+            
+            entity.Property(e => e.RestorationReason)
+                .HasMaxLength(1000);
+            
+            entity.Property(e => e.RestorationApprovedBy)
+                .HasMaxLength(255);
+            
+            entity.Property(e => e.RestorationMethod)
+                .HasMaxLength(20);
+            
+            // Foreign key relationship
+            entity.HasOne(e => e.Service)
+                .WithMany(s => s.DeletionHistory)
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            
+            // Matching query filter to align with Service entity
+            // This prevents the warning about mismatched query filters
+            entity.HasQueryFilter(sdc => sdc.Service!.DeletionStatus != DeletionStatus.Deleted);
         });
     }
 }

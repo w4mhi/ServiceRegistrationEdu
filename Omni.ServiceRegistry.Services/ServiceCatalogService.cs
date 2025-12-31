@@ -88,7 +88,19 @@ public class ServiceCatalogService : IServiceCatalogService
         
         return services;
     }
-
+    /// <summary>
+    /// Get services by deletion status
+    /// </summary>
+    public async Task<List<Service>> GetServicesByDeletionStatusAsync(DeletionStatus status)
+    {
+        List<Service> services = await serviceRepository.GetByDeletionStatusAsync(status);
+        
+        logger?.LogInformation(
+            "Retrieved {Count} services with deletion status {Status}",
+            services.Count, status);
+        
+        return services;
+    }
     /// <summary>
     /// Get service details by ID (R18)
     /// </summary>
