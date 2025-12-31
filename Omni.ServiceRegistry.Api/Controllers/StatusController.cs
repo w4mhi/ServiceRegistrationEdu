@@ -53,7 +53,7 @@ public class StatusController : ControllerBase
         if (request == null)
         {
             stopwatch.Stop();
-            logger.LogWarning("Registration status query failed: {RegistrationId} not found (Duration: {DurationMs}ms)", 
+            logger.LogDebug("Registration status query failed: {RegistrationId} not found (Duration: {DurationMs}ms)", 
                 id, stopwatch.ElapsedMilliseconds);
             return NotFound(new ProblemDetails
             {
@@ -65,7 +65,7 @@ public class StatusController : ControllerBase
 
         stopwatch.Stop();
         
-        logger.LogInformation(
+        logger.LogDebug(
             "Registration status queried: {RegistrationId} - {Status} (Duration: {DurationMs}ms, Target: <1000ms)",
             id, request.Status, stopwatch.ElapsedMilliseconds);
         
@@ -118,7 +118,7 @@ public class StatusController : ControllerBase
 
         stopwatch.Stop();
         
-        logger.LogInformation(
+        logger.LogDebug(
             "Service status queried: {ServiceId} - {ServiceName} - {HealthStatus} (Duration: {DurationMs}ms, Target: <1000ms)",
             id, service.ServiceName, service.HealthStatus, stopwatch.ElapsedMilliseconds);
         

@@ -1844,7 +1844,6 @@
 
 /* Health Insights Styles */
 .insights-container {
-    padding: 2rem;
     max-width: 1400px;
     margin: 0 auto;
 }
@@ -1995,4 +1994,35 @@
     align-items: center;
     justify-content: center;
     padding: 4rem 2rem;
+}
+
+/* Collapsible Insight Groups */
+.insight-group-header {
+    transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.insight-group-header:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.collapse-icon {
+    transition: transform 0.3s ease;
+    display: inline-block;
+    margin-right: 0.5rem;
+}
+
+.insight-group-header[aria-expanded="true"] .collapse-icon {
+    transform: rotate(90deg);
+}
+
+.insight-group {
+    margin-bottom: 1rem;
+}
+
+.collapse-content {
+    display: none !important;
+}
+
+.collapse-content.show {
+    display: block !important;
 }

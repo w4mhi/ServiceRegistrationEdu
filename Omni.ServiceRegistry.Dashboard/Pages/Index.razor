@@ -24,7 +24,7 @@
                         <span class="visually-hidden">Loading...</span>
                     </div>
                     <div>
-                        <div style="font-weight: 700; font-size: 1.1rem;">🧠 AI Analysis in Progress</div>
+                        <div style="font-weight: 700; font-size: 1.1rem;">✨ AI Analysis in Progress</div>
                         <div style="font-size: 0.9rem; opacity: 0.9;">@analysisStatus</div>
                     </div>
                 </div>
@@ -68,7 +68,7 @@
             }
             else
             {
-                <span>🧠 AI Analysis @(CooldownTimer.IsOnCooldown ? $"({CooldownTimer.RemainingSeconds}s)" : "")</span>
+                <span>✨ AI Analysis @(CooldownTimer.IsOnCooldown ? $"({CooldownTimer.RemainingSeconds}s)" : "")</span>
             }
         </button>
         <button class="btn-refresh-top" @onclick="RefreshServices">
@@ -260,7 +260,7 @@
                                                 style="background: @(showApiModal && selectedServiceId == service.ServiceId ? "#f97316" : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"); color: white; border: none; font-size: 0.9rem; padding: 0.4rem 0.8rem; transition: all 0.3s ease;"
                                                 @onclick="@(() => ShowApiEndpoints(service.ServiceId, service.ServiceName, apiEndpoints))"
                                                 title="Click to view API endpoints">
-                                            <i class="bi bi-code-slash me-1"></i>@apiEndpoints.Count APIs
+                                            <i class="bi bi-list-ul me-1"></i>@apiEndpoints.Count APIs
                                         </button>
                                     }
                                     else
@@ -416,7 +416,7 @@
         {
             await InvokeAsync(() =>
             {
-                isAnalyzing = true;
+                // Don't modify isAnalyzing here - let the local button handler manage it
                 StateHasChanged();
                 return Task.CompletedTask;
             });
@@ -426,7 +426,7 @@
         {
             await InvokeAsync(async () =>
             {
-                isAnalyzing = false;
+                // Don't modify isAnalyzing here - let the local button handler manage it
                 StateHasChanged();
             });
         });
@@ -435,7 +435,7 @@
         {
             await InvokeAsync(() =>
             {
-                isAnalyzing = false;
+                // Don't modify isAnalyzing here - let the local button handler manage it
                 StateHasChanged();
                 return Task.CompletedTask;
             });
@@ -623,8 +623,10 @@
     private async Task TriggerGlobalAnalysis()
     {
         if (CooldownTimer.IsOnCooldown || isAnalyzing)
+        {
             return;
-
+        }
+        
         isAnalyzing = true;
         analysisMessage = null;
         analysisStartTime = DateTime.UtcNow;

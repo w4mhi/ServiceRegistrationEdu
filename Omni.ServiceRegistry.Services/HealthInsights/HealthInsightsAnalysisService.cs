@@ -81,7 +81,12 @@ public class HealthInsightsAnalysisService : IHealthInsightsAnalysisService
             GeneratedAt = DateTime.UtcNow,
             TriggerType = isManualTrigger ? "Manual" : "Automatic",
             TriggeredBy = triggeredBy,
-            AnalysisStatus = "Processing"
+            AnalysisStatus = "Processing",
+            RootCauses = "[]",
+            CorrelatedServices = "[]",
+            RecommendedActions = "[]",
+            ContextData = "{}",
+            HistoricalContext = "No historical data yet"
         };
 
         logger?.LogInformation("BEFORE AddInsightAsync - InsightId: {InsightId}, ServiceId: {ServiceId}", insightId, serviceId);

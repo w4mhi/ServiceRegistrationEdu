@@ -236,19 +236,39 @@ public class HeartbeatMonitorService : BackgroundService, IHeartbeatMonitorServi
         
         if (newStatus == HealthStatus.Dead)
         {
-            loggerToUse.LogError(
-                "Service {ServiceId} marked as DEAD: {PreviousStatus} → {NewStatus} " +
-                "(missed {MissedCount} of {MaxMissed} heartbeats, {TimeSince:F1}s since last heartbeat)",
-                service.ServiceId, previousStatus, newStatus, missedCount, 
-                service.MaxMissedHeartbeats, timeSinceLastHeartbeat.TotalSeconds);
+            // Only log as Error on first transition to Dead, Debug for Dead → Dead
+            if (previousStatus != HealthStatus.Dead)
+            {
+                loggerToUse.LogError(
+                    "Service {ServiceId} marked as DEAD: {PreviousStatus} → {NewStatus} " +
+                    "(missed {MissedCount} of {MaxMissed} heartbeats, {TimeSince:F1}s since last heartbeat)",
+                    service.ServiceId, previousStatus, newStatus, missedCount, 
+                    service.MaxMissedHeartbeats, timeSinceLastHeartbeat.TotalSeconds);
+            }
+            else
+            {
+                loggerToUse.LogDebug(
+                    "Service {ServiceId} still DEAD: {MissedCount} of {MaxMissed} heartbeats, {TimeSince:F1}s since last",
+                    service.ServiceId, missedCount, service.MaxMissedHeartbeats, timeSinceLastHeartbeat.TotalSeconds);
+            }
         }
         else
         {
-            loggerToUse.LogWarning(
-                "Service {ServiceId} health degraded: {PreviousStatus} → {NewStatus} " +
-                "(missed {MissedCount} of {MaxMissed} heartbeats, {TimeSince:F1}s since last heartbeat)",
-                service.ServiceId, previousStatus, newStatus, missedCount, 
-                service.MaxMissedHeartbeats, timeSinceLastHeartbeat.TotalSeconds);
+            // Only log Warning on first transition to degraded status, Debug for same→same
+            if (previousStatus != newStatus)
+            {
+                loggerToUse.LogWarning(
+                    "Service {ServiceId} health degraded: {PreviousStatus} → {NewStatus} " +
+                    "(missed {MissedCount} of {MaxMissed} heartbeats, {TimeSince:F1}s since last heartbeat)",
+                    service.ServiceId, previousStatus, newStatus, missedCount, 
+                    service.MaxMissedHeartbeats, timeSinceLastHeartbeat.TotalSeconds);
+            }
+            else
+            {
+                loggerToUse.LogDebug(
+                    "Service {ServiceId} still {Status}: {MissedCount} of {MaxMissed} heartbeats",
+                    service.ServiceId, newStatus, missedCount, service.MaxMissedHeartbeats);
+            }
         }
     }
     

@@ -62,6 +62,7 @@ public class HealthInsightsRepository : IHealthInsightsRepository
     public async Task<List<ServiceHealthInsight>> GetRecentInsightsAsync(int count, DateTime? since = null)
     {
         IQueryable<ServiceHealthInsight> query = dbContext.ServiceHealthInsights
+            .IgnoreQueryFilters()
             .Where(i => i.AnalysisStatus == "Completed");
 
         if (since.HasValue)

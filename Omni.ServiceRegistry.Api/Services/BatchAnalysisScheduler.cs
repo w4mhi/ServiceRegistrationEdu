@@ -45,20 +45,20 @@ public class BatchAnalysisScheduler : BackgroundService
             return;
         }
         
-        logger.LogInformation("Batch Analysis Scheduler started");
+        logger.LogInformation("Batch Analysis Scheduler started (24-hour interval)");
 
         while (!stoppingToken.IsCancellationRequested)
         {
             DateTime now = DateTime.UtcNow;
-            DateTime nextMidnight = now.Date.AddDays(1);
-            TimeSpan delayUntilMidnight = nextMidnight - now;
+            DateTime nextRun = now.AddHours(24);
+            TimeSpan delayUntilNextRun = nextRun - now;
 
             logger.LogInformation("Next batch analysis scheduled in {Hours} hours at {NextRun}", 
-                delayUntilMidnight.TotalHours, nextMidnight);
+                delayUntilNextRun.TotalHours, nextRun);
 
             try
             {
-                await Task.Delay(delayUntilMidnight, stoppingToken);
+                await Task.Delay(delayUntilNextRun, stoppingToken);
             }
             catch (OperationCanceledException)
             {

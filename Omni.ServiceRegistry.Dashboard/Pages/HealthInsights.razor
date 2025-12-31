@@ -1,17 +1,23 @@
 @page "/insights"
+@implements IDisposable
 @using Microsoft.AspNetCore.Components.Web
 @using Omni.ServiceRegistry.Dashboard.DTOs
 @using Omni.ServiceRegistry.Dashboard.Services
 @inject HealthInsightsApiClient InsightsClient
 @inject ILogger<HealthInsights> Logger
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Health Insights</PageTitle>
 
 <div class="insights-container">
-    <div class="page-header">
-        <h1>🧠 AI Health Insights</h1>
-        <p class="text-muted">LLM-powered analysis of service health patterns and anomalies</p>
+    <div class="page-header-modern">
+        <h1 class="page-title-modern">✨🤖 AI Health Insights</h1>
+        <button class="btn-refresh-top" @onclick="RefreshInsights">
+            <i class="bi bi-arrow-clockwise"></i>
+            <span>Refresh</span>
+        </button>
     </div>
+    <p class="text-muted" style="margin-bottom: 1.5rem;">LLM-powered analysis of service health patterns and anomalies</p>
 
     @if (isLoading)
     {
@@ -54,94 +60,119 @@
         </div>
 
         <div class="insights-list">
-            @foreach (HealthInsightDto insight in insights.OrderByDescending(i => i.GeneratedAt))
+            @foreach (var serviceGroup in insights.OrderByDescending(i => i.GeneratedAt).GroupBy(i => i.ServiceName))
             {
-                <div class="insight-card @GetInsightSeverityClass(insight)">                
-                    <div class="insight-header">
-                        <div class="insight-title">
-                            <h5>@insight.ServiceName</h5>
-                            <span class="badge @GetTriggerBadgeClass(insight.TriggerType)">
-                                @insight.TriggerType
-                            </span>
-                            <span class="badge @GetStatusBadgeClass(insight.AnalysisStatus)">
-                                @insight.AnalysisStatus
-                            </span>
-                        </div>
-                        <div class="insight-meta">
-                            <small class="text-muted">
-                                @insight.GeneratedAt.ToString("MMM dd, yyyy HH:mm:ss") UTC
-                                · @insight.LlmModel · @insight.TokensUsed tokens · @insight.ProcessingTimeMs ms
-                            </small>
+                string serviceName = serviceGroup.Key;
+                int insightCount = serviceGroup.Count();
+                HealthInsightDto latestInsight = serviceGroup.First();
+                bool isExpanded = expandedGroups.Contains(serviceName);
+                
+                <div class="insight-group mb-3">
+                    <div class="insight-group-header @GetInsightSeverityClass(latestInsight)" 
+                         @onclick="@(() => ToggleGroup(serviceName))"
+                         style="cursor: pointer; padding: 1rem; border-radius: 8px; border: 1px solid #dee2e6;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 style="margin: 0;">
+                                    <i class="bi @(isExpanded ? "bi-chevron-down" : "bi-chevron-right") collapse-icon"></i>
+                                    @serviceName
+                                </h5>
+                                <small class="text-muted">@insightCount insight(s) · Latest: @latestInsight.GeneratedAt.ToString("MMM dd, HH:mm")</small>
+                            </div>
+                            <div>
+                                <span class="badge @GetTriggerBadgeClass(latestInsight.TriggerType)">
+                                    @latestInsight.TriggerType
+                                </span>
+                                <span class="badge @GetStatusBadgeClass(latestInsight.AnalysisStatus)">
+                                    @latestInsight.AnalysisStatus
+                                </span>
+                            </div>
                         </div>
                     </div>
+                    
+                    <div class="collapse-content @(isExpanded ? "show" : "")"
+                        @foreach (HealthInsightDto insight in serviceGroup.OrderByDescending(i => i.GeneratedAt))
+                        {
+                            <div class="insight-card @GetInsightSeverityClass(insight)" style="margin-top: 0.5rem;">                
+                                <div class="insight-header">
+                                    <div class="insight-title">
+                                        <span class="badge @GetTriggerBadgeClass(insight.TriggerType)">
+                                            @insight.TriggerType
+                                        </span>
+                                        <span class="badge @GetStatusBadgeClass(insight.AnalysisStatus)">
+                                            @insight.AnalysisStatus
+                                        </span>
+                                    </div>
+                                    <div class="insight-meta">
+                                        <small class="text-muted">
+                                            @insight.GeneratedAt.ToString("MMM dd, yyyy HH:mm:ss") UTC
+                                            · @insight.LlmModel · @insight.TokensUsed tokens · @insight.ProcessingTimeMs ms
+                                        </small>
+                                    </div>
+                                </div>
 
-                    @if (insight.AnalysisStatus == "Completed")
-                    {
-                        <div class="insight-body">
-                            <div class="insight-section">
-                                <h6>📋 Summary</h6>
-                                <p>@insight.Summary</p>
+                                @if (insight.AnalysisStatus == "Completed")
+                                {
+                                    <div class="insight-body">
+                            <div class="insight-section" style="margin-bottom: 0.5rem;">
+                                <strong>📋 Summary:</strong> @insight.Summary
                             </div>
 
                             @if (insight.RootCauses.Count > 0)
                             {
-                                <div class="insight-section">
-                                    <h6>🔍 Root Causes</h6>
-                                    <ul>
-                                        @foreach (string cause in insight.RootCauses)
-                                        {
-                                            <li>@cause</li>
-                                        }
-                                    </ul>
+                                <div class="insight-section" style="margin-bottom: 0.5rem;">
+                                    <strong>🔍 Root Causes:</strong><br />
+                                    @foreach (string cause in insight.RootCauses)
+                                    {
+                                        <span>• @cause<br /></span>
+                                    }
                                 </div>
                             }
 
                             @if (insight.CorrelatedServices.Count > 0)
                             {
-                                <div class="insight-section">
-                                    <h6>🔗 Correlated Services</h6>
-                                    <ul>
-                                        @foreach (CorrelatedServiceDto correlated in insight.CorrelatedServices)
-                                        {
-                                            <li><strong>@correlated.Service:</strong> @correlated.Impact</li>
-                                        }
-                                    </ul>
+                                <div class="insight-section" style="margin-bottom: 0.5rem;">
+                                    <strong>🔗 Correlated Services:</strong><br />
+                                    @foreach (CorrelatedServiceDto correlated in insight.CorrelatedServices)
+                                    {
+                                        <span>• <strong>@correlated.Service:</strong> @correlated.Impact<br /></span>
+                                    }
                                 </div>
                             }
 
                             @if (!string.IsNullOrEmpty(insight.HistoricalContext))
                             {
-                                <div class="insight-section">
-                                    <h6>📊 Historical Context</h6>
-                                    <p>@insight.HistoricalContext</p>
+                                <div class="insight-section" style="margin-bottom: 0.5rem;">
+                                    <strong>📊 Historical Context:</strong> @insight.HistoricalContext
                                 </div>
                             }
 
                             @if (insight.RecommendedActions.Count > 0)
                             {
-                                <div class="insight-section">
-                                    <h6>💡 Recommended Actions</h6>
-                                    <ul>
-                                        @foreach (string action in insight.RecommendedActions)
-                                        {
-                                            <li>@action</li>
-                                        }
-                                    </ul>
+                                <div class="insight-section" style="margin-bottom: 0.5rem;">
+                                    <strong>💡 Recommended Actions:</strong><br />
+                                    @foreach (string action in insight.RecommendedActions)
+                                    {
+                                        <span>• @action<br /></span>
+                                    }
                                 </div>
                             }
-                        </div>
-                    }
-                    else if (insight.AnalysisStatus == "Failed")
-                    {
-                        <div class="alert alert-danger mb-0">
-                            <strong>Error:</strong> @insight.ErrorMessage
-                        </div>
-                    }
+                                        </div>
+                                    }
+                                    else if (insight.AnalysisStatus == "Failed")
+                                    {
+                                        <div class="alert alert-danger mb-0">
+                                            <strong>Error:</strong> @insight.ErrorMessage
+                                        </div>
+                                    }
 
-                    <div class="insight-footer">
-                        <small class="text-muted">
-                            Triggered by: @insight.TriggeredBy
-                        </small>
+                                    <div class="insight-footer">
+                                        <small class="text-muted">
+                                            Triggered by: @insight.TriggeredBy
+                                        </small>
+                                    </div>
+                                </div>
+                        }
                     </div>
                 </div>
             }
@@ -153,27 +184,81 @@
     private List<HealthInsightDto> insights = new();
     private bool isLoading = true;
     private int avgTokens = 0;
+    private System.Threading.Timer? refreshTimer;
+    private HashSet<string> expandedGroups = new();
 
     protected override async Task OnInitializedAsync()
     {
         await LoadInsightsAsync();
     }
 
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reload data every time we navigate to this page
+        await LoadInsightsAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {if (firstRender)
+        {
+            // Auto-refresh every 5 seconds to show new insights as they're created
+            refreshTimer = new System.Threading.Timer(async _ =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await LoadInsightsAsync();
+                    StateHasChanged();
+                });
+            }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        }
+    }
+
+    private void ToggleGroup(string serviceName)
+    {
+        if (expandedGroups.Contains(serviceName))
+        {
+            expandedGroups.Remove(serviceName);
+        }
+        else
+        {
+            expandedGroups.Add(serviceName
+            }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        }
+    }
+
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
+    }
+
+    private async Task RefreshInsights()
+    {
+        await LoadInsightsAsync();
+    }
+
     private async Task LoadInsightsAsync()
     {
-        isLoading = true;
-        StateHasChanged();
-
         try
         {
+            isLoading = true;
+            StateHasChanged();
+            
+            Logger.LogInformation("LoadInsightsAsync started");
+
             insights = await InsightsClient.GetRecentInsightsAsync(50);
+            
+            Logger.LogInformation("Loaded {Count} insights from API", insights.Count);
             
             if (insights.Count > 0)
             {
                 avgTokens = (int)insights.Where(i => i.TokensUsed > 0).Average(i => i.TokensUsed);
+                Logger.LogInformation("First insight: {Status}, Generated: {Time}", 
+                    insights[0].AnalysisStatus, insights[0].GeneratedAt);
             }
-
-            Logger.LogInformation("Loaded {Count} insights", insights.Count);
+            else
+            {
+                Logger.LogWarning("No insights returned from API");
+            }
         }
         catch (Exception ex)
         {
@@ -183,6 +268,8 @@
         {
             isLoading = false;
             StateHasChanged();
+            Logger.LogInformation("LoadInsightsAsync completed, isLoading={IsLoading}, insights count={Count}", 
+                isLoading, insights.Count);
         }
     }
 
@@ -236,6 +323,6 @@
             "Manual" => "bg-primary",
             "Automatic" => "bg-info",
             _ => "bg-secondary"
-        };
+ indow.initializeCollapses();
     }
-}
+</script>

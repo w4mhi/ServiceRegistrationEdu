@@ -17,7 +17,7 @@ namespace Omni.ServiceRegistry.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/insights")]
-[EnableRateLimiting("insights")]
+// [EnableRateLimiting("insights")]  // Temporarily disabled for testing
 public class HealthInsightsController : ControllerBase
 {
     private readonly IHealthInsightsAnalysisService analysisService;

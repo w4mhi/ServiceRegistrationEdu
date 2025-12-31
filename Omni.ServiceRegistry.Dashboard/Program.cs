@@ -64,8 +64,8 @@ builder.Services.AddHttpClient<HealthInsightsApiClient>(client =>
 // Register JSON options as singleton for use in API clients
 builder.Services.AddSingleton(jsonOptions);
 
-// Register cooldown timer service as scoped
-builder.Services.AddScoped<CooldownTimerService>();
+// Register cooldown timer service as singleton to persist across navigation
+builder.Services.AddSingleton<CooldownTimerService>();
 
 // Configure SignalR hub client for receiving real-time updates from API
 string apiHubUrl = $"{apiBaseUrl}/hubs/servicemonitor";

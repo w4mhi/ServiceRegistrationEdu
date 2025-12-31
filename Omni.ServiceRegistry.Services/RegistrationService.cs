@@ -128,7 +128,7 @@ public class RegistrationService : IRegistrationService
         
         if (request != null)
         {
-            logger?.LogInformation(
+            logger?.LogDebug(
                 "Registration status queried for {RegistrationId}: {Status}",
                 registrationId, request.Status);
         }

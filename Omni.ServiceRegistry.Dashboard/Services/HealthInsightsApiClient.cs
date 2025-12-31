@@ -23,7 +23,8 @@ public class HealthInsightsApiClient
     {
         this.httpClient = httpClient;
         this.logger = logger;
-        baseUrl = configuration["ApiBaseUrl"] ?? "http://localhost:5159";
+        // BaseAddress is already set by Program.cs, use empty string for relative URLs
+        baseUrl = "";
     }
 
     /// <summary>
@@ -39,7 +40,7 @@ public class HealthInsightsApiClient
                 GlobalAnalysis = false
             };
 
-            HttpResponseMessage response = await httpClient.PostAsJsonAsync($"{baseUrl}/api/v1/insights/analyze", request);
+            HttpResponseMessage response = await httpClient.PostAsJsonAsync("api/v1/insights/analyze", request);
             
             if (response.IsSuccessStatusCode)
             {
@@ -69,7 +70,7 @@ public class HealthInsightsApiClient
                 GlobalAnalysis = true
             };
 
-            HttpResponseMessage response = await httpClient.PostAsJsonAsync($"{baseUrl}/api/v1/insights/analyze", request);
+            HttpResponseMessage response = await httpClient.PostAsJsonAsync("api/v1/insights/analyze", request);
             
             if (response.IsSuccessStatusCode)
             {
@@ -94,7 +95,7 @@ public class HealthInsightsApiClient
     {
         try
         {
-            return await httpClient.GetFromJsonAsync<HealthInsightDto>($"{baseUrl}/api/v1/insights/service/{serviceId}/latest");
+            return await httpClient.GetFromJsonAsync<HealthInsightDto>($"api/v1/insights/service/{serviceId}/latest");
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -114,7 +115,7 @@ public class HealthInsightsApiClient
     {
         try
         {
-            string url = $"{baseUrl}/api/v1/insights/service/{serviceId}";
+            string url = $"api/v1/insights/service/{serviceId}";
             if (since.HasValue)
             {
                 url += $"?since={since.Value:O}";
@@ -137,13 +138,15 @@ public class HealthInsightsApiClient
     {
         try
         {
-            string url = $"{baseUrl}/api/v1/insights/recent?count={count}";
+            string url = $"api/v1/insights/recent?count={count}";
             if (since.HasValue)
             {
                 url += $"&since={since.Value:O}";
             }
 
+            logger.LogInformation("Calling insights API: {Url}", url);
             List<HealthInsightDto>? insights = await httpClient.GetFromJsonAsync<List<HealthInsightDto>>(url);
+            logger.LogInformation("Received {Count} insights from API", insights?.Count ?? 0);
             return insights ?? new List<HealthInsightDto>();
         }
         catch (Exception ex)
@@ -160,7 +163,7 @@ public class HealthInsightsApiClient
     {
         try
         {
-            return await httpClient.GetFromJsonAsync<HealthInsightDto>($"{baseUrl}/api/v1/insights/{insightId}");
+            return await httpClient.GetFromJsonAsync<HealthInsightDto>($"api/v1/insights/{insightId}");
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {

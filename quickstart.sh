@@ -56,7 +56,7 @@ done
 
 # Build solution
 echo "🔨 Building solution..."
-dotnet build --nologo --verbosity quiet
+dotnet build --configuration Release --nologo --verbosity quiet
 
 # Run migrations
 echo "🗄️  Applying database migrations..."
@@ -84,7 +84,7 @@ echo ""
 
 # Start API in background
 cd Omni.ServiceRegistry.Api
-ASPNETCORE_ENVIRONMENT=Development dotnet run --no-build &
+ASPNETCORE_ENVIRONMENT=Development dotnet run --configuration Release --no-build &
 API_PID=$!
 cd ..
 
@@ -93,7 +93,7 @@ sleep 5
 
 # Start Dashboard in background
 cd Omni.ServiceRegistry.Dashboard
-ASPNETCORE_ENVIRONMENT=Development dotnet run --no-build &
+ASPNETCORE_ENVIRONMENT=Development dotnet run --configuration Release --no-build &
 DASHBOARD_PID=$!
 cd ..
 

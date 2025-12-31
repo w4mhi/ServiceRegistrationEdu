@@ -91,13 +91,13 @@ builder.Services.AddRateLimiter(options =>
     });
     
     // Rate limiting for health insights analysis endpoints
-    // Server-side limit: 5 requests per 5 minutes per user
+    // Server-side limit: 1 request per minute per user
     options.AddFixedWindowLimiter("insights", config =>
     {
-        config.PermitLimit = 5;
-        config.Window = TimeSpan.FromMinutes(5);
+        config.PermitLimit = 1;
+        config.Window = TimeSpan.FromMinutes(1);
         config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        config.QueueLimit = 2;
+        config.QueueLimit = 0;
     });
 });
 

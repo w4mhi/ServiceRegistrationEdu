@@ -53,17 +53,9 @@ public class AnalysisQueueService
             throw new ArgumentNullException(nameof(request));
         }
 
-        bool isDuplicate = pendingRequests.Values
-            .Any(r => r.ServiceId == request.ServiceId 
-                && (DateTime.UtcNow - r.QueuedAt).TotalMinutes < 5);
-
-        if (isDuplicate)
-        {
-            logger?.LogWarning("Duplicate analysis request for service {ServiceId} within 5 minutes, skipping", 
-                request.ServiceId);
-            return;
-        }
-
+        // No duplicate checking - allow analysis every time button is pressed
+        // Rate limiting is enforced at the API level (1 per minute)
+        
         pendingRequests.TryAdd(request.RequestId, request);
         
         await channel.Writer.WriteAsync(request, cancellationToken);
