@@ -268,4 +268,31 @@ public class HealthInsightsController : ControllerBase
             ErrorMessage = insight.ErrorMessage
         };
     }
+
+    /// <summary>
+    /// Check if Ollama service is healthy and ready
+    /// </summary>
+    [HttpGet("health/ollama")]
+    [ProducesResponseType(typeof(OllamaHealthDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CheckOllamaHealth()
+    {
+        try
+        {
+            bool isHealthy = await analysisService.CheckOllamaHealthAsync();
+            return Ok(new OllamaHealthDto 
+            { 
+                IsHealthy = isHealthy,
+                Message = isHealthy ? "Ollama is ready" : "Ollama is not responding"
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to check Ollama health");
+            return Ok(new OllamaHealthDto 
+            { 
+                IsHealthy = false,
+                Message = $"Health check failed: {ex.Message}"
+            });
+        }
+    }
 }

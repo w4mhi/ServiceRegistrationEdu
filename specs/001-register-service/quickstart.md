@@ -8,13 +8,17 @@
 
 Before you begin, ensure you have the following installed:
 
-- **.NET 8.0 SDK** or later
-  - Verify: `dotnet --version` (should show 8.0.x or higher)
+- **.NET 9.0 SDK** or later
+  - Verify: `dotnet --version` (should show 9.0.x or higher)
   - Download: https://dotnet.microsoft.com/download
 
-- **PostgreSQL 15+** or **SQL Server 2019+**
+- **PostgreSQL 15+** (recommended for production)
   - PostgreSQL: https://www.postgresql.org/download/
-  - SQL Server: https://www.microsoft.com/sql-server/sql-server-downloads
+  - Or use Docker: `docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=dev_password postgres:15-alpine`
+
+- **Ollama** (for AI Health Insights)
+  - Download: https://ollama.ai/download
+  - Install phi4 model: `ollama pull phi4`
 
 - **Git** (for cloning repository)
   - Verify: `git --version`
@@ -23,12 +27,36 @@ Before you begin, ensure you have the following installed:
 
 - **curl** or **Postman** (for testing endpoints)
 
-## Step 1: Clone Repository
+## Step 1: Quick Start (Recommended)
+
+Use the automated quickstart script:
 
 ```bash
 git clone https://github.com/your-org/service-registry.git
 cd service-registry
-git checkout 1-register-service
+./quickstart.sh
+```
+
+This automatically:
+- Starts PostgreSQL in Docker
+- Starts Ollama with phi4 model
+- Runs database migrations
+- Starts API on port 5159
+- Starts Dashboard on port 5083
+
+**Access Points:**
+- Dashboard: http://localhost:5083
+- API: http://localhost:5159
+- API Docs: http://localhost:5159/scalar/v1
+- Ollama: http://localhost:11434
+
+**Skip to Step 7** if using quickstart.sh
+
+## Step 1 (Manual): Clone Repository
+
+```bash
+git clone https://github.com/your-org/service-registry.git
+cd service-registry
 ```
 
 ## Step 2: Database Setup
@@ -111,9 +139,21 @@ dotnet build
 
 Ensure all projects compile without errors.
 
-## Step 6: Run API
+## Step 6: Start Services
 
-Start the API server:
+### Start Ollama (for AI Insights)
+
+```bash
+# If not already running via quickstart.sh
+docker run -d -p 11434:11434 --name ollama \
+  -v ollama-data:/root/.ollama \
+  ollama/ollama:latest
+
+# Pull phi4 model
+docker exec ollama ollama pull phi4
+```
+
+### Start API
 
 ```bash
 cd src/Omni.ServiceRegistry.Api
@@ -123,23 +163,29 @@ dotnet run
 Expected output:
 ```
 info: Microsoft.Hosting.Lifetime[14]
-      Now listening on: http://localhost:5000
-info: Microsoft.Hosting.Lifetime[14]
-      Now listening on: https://localhost:5001
+      Now listening on: http://localhost:5159
 info: Microsoft.Hosting.Lifetime[0]
       Application started. Press Ctrl+C to shut down.
 ```
 
-The API is now running at:
-- HTTP: http://localhost:5000
-- HTTPS: https://localhost:5001
+The API is now running at: **http://localhost:5159**
+
+### Start Dashboard (Optional)
+
+```bash
+# In a new terminal
+cd src/Omni.ServiceRegistry.Dashboard
+dotnet run
+```
+
+Dashboard running at: **http://localhost:5083**
 
 ## Step 7: Test Endpoints
 
 ### 7.1 Register a Service
 
 ```bash
-curl -X POST http://localhost:5000/api/v1/register \
+curl -X POST http://localhost:5159/api/v1/register \
   -H "Content-Type: application/json" \
   -d '{
     "serviceName": "payment-service",
@@ -169,7 +215,7 @@ curl -X POST http://localhost:5000/api/v1/register \
 ### 7.2 Check Registration Status
 
 ```bash
-curl http://localhost:5000/api/v1/status/registration/550e8400-e29b-41d4-a716-446655440000
+curl http://localhost:5159/api/v1/status/registration/550e8400-e29b-41d4-a716-446655440000
 ```
 
 **Expected Response** (200 OK):
@@ -191,7 +237,7 @@ curl http://localhost:5000/api/v1/status/registration/550e8400-e29b-41d4-a716-44
 ### 7.3 List Pending Registrations (Admin)
 
 ```bash
-curl http://localhost:5000/api/v1/admin/registrations/pending
+curl http://localhost:5159/api/v1/admin/registrations/pending
 ```
 
 **Expected Response** (200 OK):
@@ -222,7 +268,7 @@ curl http://localhost:5000/api/v1/admin/registrations/pending
 ### 7.4 Approve Registration (Admin)
 
 ```bash
-curl -X POST http://localhost:5000/api/v1/admin/registrations/550e8400-e29b-41d4-a716-446655440000/approve \
+curl -X POST http://localhost:5159/api/v1/admin/registrations/550e8400-e29b-41d4-a716-446655440000/approve \
   -H "Content-Type: application/json" \
   -d '{
     "comments": "Service reviewed and approved for production use"
@@ -246,7 +292,7 @@ curl -X POST http://localhost:5000/api/v1/admin/registrations/550e8400-e29b-41d4
 ### 7.5 Check Service Status
 
 ```bash
-curl http://localhost:5000/api/v1/status/service/7c9e6679-7425-40de-944b-e07fc1f90ae7
+curl http://localhost:5159/api/v1/status/service/7c9e6679-7425-40de-944b-e07fc1f90ae7
 ```
 
 **Expected Response** (200 OK):
@@ -275,7 +321,7 @@ curl http://localhost:5000/api/v1/status/service/7c9e6679-7425-40de-944b-e07fc1f
 ### 7.6 Send Heartbeat
 
 ```bash
-curl -X POST http://localhost:5000/api/v1/heartbeat/7c9e6679-7425-40de-944b-e07fc1f90ae7 \
+curl -X POST http://localhost:5159/api/v1/heartbeat/7c9e6679-7425-40de-944b-e07fc1f90ae7 \
   -H "Content-Type: application/json" \
   -d '{
     "clientStatus": "running"
@@ -294,7 +340,7 @@ curl -X POST http://localhost:5000/api/v1/heartbeat/7c9e6679-7425-40de-944b-e07f
 ### 7.7 Request Service Deletion
 
 ```bash
-curl -X POST http://localhost:5000/api/v1/delete/7c9e6679-7425-40de-944b-e07fc1f90ae7 \
+curl -X POST http://localhost:5159/api/v1/delete/7c9e6679-7425-40de-944b-e07fc1f90ae7 \
   -H "Content-Type: application/json" \
   -d '{
     "reason": "Service decommissioned for testing purposes"
@@ -313,6 +359,26 @@ curl -X POST http://localhost:5000/api/v1/delete/7c9e6679-7425-40de-944b-e07fc1f
   "message": "Deletion request submitted. Awaiting administrator approval."
 }
 ```
+
+### 7.8 Trigger AI Health Insights (New Feature)
+
+```bash
+# Trigger global analysis
+curl -X POST http://localhost:5159/api/v1/insights/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"globalAnalysis": true}'
+
+# Get recent insights
+curl http://localhost:5159/api/v1/insights/recent?count=10
+
+# Get insights for specific service
+curl http://localhost:5159/api/v1/insights/service/7c9e6679-7425-40de-944b-e07fc1f90ae7
+
+# Check Ollama health
+curl http://localhost:5159/api/v1/insights/health/ollama
+```
+
+**Dashboard**: Click "✨ AI Analysis" button on main monitoring page
 
 ## Step 8: Run Tests
 
@@ -343,12 +409,13 @@ Expected output: All tests passing (green)
 
 With the API running, navigate to:
 
-**Swagger UI**: http://localhost:5000/swagger
+**Scalar UI**: http://localhost:5159/scalar/v1
 
 This provides:
-- Interactive API documentation
-- Schema definitions
+- Interactive API documentation with modern UI
+- Schema definitions and examples
 - Try-it-out functionality for each endpoint
+- Request/response code snippets in multiple languages
 
 ## Common Issues & Troubleshooting
 
@@ -469,12 +536,18 @@ export ASPNETCORE_ENVIRONMENT="Development"
 
 ## Next Steps
 
+- **Explore Dashboard**: Open http://localhost:5083 to view:
+  - Real-time service health monitoring with SignalR
+  - AI-powered health insights with recommendations
+  - Pending approvals workflow with validation
+  - Service analytics and trends
+- **Test AI Analysis**: Trigger analysis on dashboard, view insights with root causes
+- **Service Restoration**: Test soft delete → restore workflow
+- **Client Simulator**: Run `./run-client-simulator.sh` for load testing scenarios
 - **Authentication**: Implement P2 authentication/authorization (currently deferred)
-- **Service Catalog UI**: Build dashboard for browsing registered services
-- **Metrics**: Add Prometheus/Grafana for heartbeat monitoring visualization
+- **Metrics**: Add Prometheus/Grafana for extended monitoring
 - **Alerts**: Configure notifications for DEAD/DEGRADED services
-- **Load Testing**: Test 10,000 heartbeats/minute throughput target
-- **Docker**: Containerize API for deployment (`Dockerfile` in API project)
+- **Kubernetes**: Deploy using manifests in `deployment/kubernetes/`
 
 ## Additional Resources
 

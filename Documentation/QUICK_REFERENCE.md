@@ -1,26 +1,157 @@
-# Quick Reference: New Features
+# Quick Reference
 
-## Service Deletion API
+## Quick Start Commands
+
+### Start Everything (Recommended)
+```bash
+./quickstart.sh
+```
+This starts PostgreSQL, Ollama with phi4 model, API (port 5159), and Dashboard (port 5083).
+
+### Access Points
+- Dashboard: http://localhost:5083
+- API: http://localhost:5159
+- API Docs: http://localhost:5159/scalar/v1
+- Ollama: http://localhost:11434
+
+---
+
+## AI Health Insights
+
+### Trigger Global Analysis
+```bash
+# Via Dashboard: Click "✨ AI Analysis" button on main page
+
+# Via API:
+curl -X POST http://localhost:5159/api/v1/insights/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "globalAnalysis": true
+  }'
+```
+
+### Get Recent Insights
+```bash
+curl http://localhost:5159/api/v1/insights/recent?count=20
+```
+
+### Get Service Insights
+```bash
+curl http://localhost:5159/api/v1/insights/service/{serviceId}
+```
+
+### Check Ollama Health
+```bash
+curl http://localhost:5159/api/v1/insights/health/ollama
+```
+---
+
+## Service Registration & Management
+
+### Register a Service
+```bash
+curl -X POST http://localhost:5159/api/v1/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "serviceName": "payment-service",
+    "description": "Payment processing",
+    "contactEmail": "team@example.com",
+    "endpoints": ["http://payment.internal:8080"],
+    "apiEndpoints": [
+      {
+        "method": "POST",
+        "path": "/api/payments",
+        "description": "Process payment"
+      }
+    ],
+    "heartbeatTimeout": 30,
+    "maxMissedHeartbeats": 5
+  }'
+```
+
+### Send Heartbeat
+```bash
+curl -X POST http://localhost:5159/api/v1/heartbeat/{serviceId} \
+  -H "Content-Type: application/json" \
+  -d '{"metadata": {"version": "1.2.3"}}'
+```
+
+### Get Service Status
+```bash
+curl http://localhost:5159/api/v1/status/service/{serviceId}
+```
+
+---
+
+## Service Deletion
 
 ### Request Deletion
 ```bash
-curl -X POST http://localhost:8080/api/v1/admin/services/{serviceId}/delete \
+curl -X POST http://localhost:5159/api/v1/delete/{serviceId} \
   -H "Content-Type: application/json" \
   -d '{
-    "reason": "Service is being decommissioned",
-    "comments": "Migrate to new-payment-service before deletion"
+    "requestedBy": "admin@example.com",
+    "reason": "Service decommissioned",
+    "comments": "Migrate to new service first"
+  }'
+```
+
+### Approve Deletion
+```bash
+curl -X POST http://localhost:5159/api/v1/admin/deletions/{serviceId}/approve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "approvedBy": "admin@example.com"
   }'
 ```
 
 ### Get Pending Deletions
 ```bash
-curl http://localhost:8080/api/v1/admin/deletions/pending
+curl http://localhost:5159/api/v1/admin/deletions/pending
 ```
 
-### Approve Deletion
+### Restore Deleted Service
 ```bash
-curl -X POST http://localhost:8080/api/v1/admin/deletions/{serviceId}/approve
+curl -X POST http://localhost:5159/api/v1/admin/services/{serviceId}/restore \
+  -H "Content-Type: application/json" \
+  -d '{
+    "restoredBy": "admin@example.com",
+    "reason": "Service needed again",
+    "restoreMethod": "Manual"
+  }'
 ```
+
+---
+
+## Administrator Actions
+
+### Approve Registration
+```bash
+curl -X POST http://localhost:5159/api/v1/admin/registrations/{id}/approve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "approvedBy": "admin@example.com",
+    "comments": "Verified requirements"
+  }'
+```
+
+### Deny Registration
+```bash
+curl -X POST http://localhost:5159/api/v1/admin/registrations/{id}/deny \
+  -H "Content-Type: application/json" \
+  -d '{
+    "deniedBy": "admin@example.com",
+    "reason": "Missing documentation"
+  }'
+```
+
+### Validate Service Endpoints
+```bash
+curl -X POST http://localhost:5159/api/v1/admin/registrations/{id}/validate
+```
+
+### Bulk Approve Registrations
+Use the Dashboard: Navigate to Pending Approvals → Click "Approve All" button
 
 ---
 
@@ -84,67 +215,56 @@ kubectl logs -l app=service-registry-api -n service-registry --tail=50 -f
 
 ---
 
-## Docker Deployment
+## Docker Deployment (Deprecated)
 
-### Build Images
-```bash
-cd deployment/docker
+Manual Docker deployment is deprecated. Use `./quickstart.sh` for local development.
 
-# Build API
-docker build -f Dockerfile.api -t service-registry-api:latest ../..
+---
 
-# Build Dashboard
-docker build -f Dockerfile.dashboard -t service-registry-dashboard:latest ../..
+## Database Configuration
+
+### PostgreSQL (Default)
+```json
+{
+  "DatabaseProvider": "Postgres",
+  "ConnectionStrings": {
+    "ServiceRegistry": "Host=localhost;Database=serviceregistry;Username=serviceregistry;Password=dev_password"
+  }
+}
 ```
 
-### Run with Docker Compose (PostgreSQL)
-```bash
-docker-compose --profile postgres up --build
-```
-
-### Run with Docker Compose (Redis)
-```bash
-docker-compose --profile redis up --build
-```
-
-### Access
-- API: http://localhost:8080
-- Dashboard: http://localhost:5160
-- PostgreSQL: localhost:5432
-- Redis: localhost:6379
-
-### Stop
-```bash
-docker-compose --profile postgres down
+### In-Memory (Testing Only)
+```json
+{
+  "DatabaseProvider": "InMemory"
+}
 ```
 
 ---
 
-## Redis Storage Configuration
+## Ollama Configuration
 
-### API appsettings.json
+### Default Settings (appsettings.json)
 ```json
 {
-  "DatabaseProvider": "Redis",
-  "ConnectionStrings": {
-    "ServiceRegistry": "localhost:6379"
+  "HealthInsights": {
+    "OllamaBaseUrl": "http://localhost:11434",
+    "OllamaModel": "phi4",
+    "MaxTokens": 4500,
+    "Temperature": 0.7,
+    "EnableAnalysis": true
   }
 }
 ```
 
-### Dashboard appsettings.json
-```json
-{
-  "DatabaseProvider": "Redis",
-  "ConnectionStrings": {
-    "ServiceRegistry": "localhost:6379"
-  }
-}
-```
-
-### Run Redis with Docker
+### Pull phi4 Model Manually
 ```bash
-docker run -d -p 6379:6379 --name redis redis/redis-stack-server:latest
+ollama pull phi4
+```
+
+### Check Ollama Status
+```bash
+curl http://localhost:11434/
 ```
 
 ---
@@ -511,8 +631,12 @@ spec:
 
 ## Support & Documentation
 
-- Main README: `/README.md`
-- Implementation Details: `/IMPLEMENTATION_COMPLETE.md`
-- What's Not Implemented: `/WHATS_NOT_IMPLEMENTED.md`
-- Kubernetes Guide: `/deployment/kubernetes/README.md`
-- API Specification: `/specs/1-register-service/spec.md`
+- **Main README**: [/README.md](/README.md)
+- **Client Simulator**: [CLIENT_SIMULATOR_GUIDE.md](CLIENT_SIMULATOR_GUIDE.md)
+- **What's Not Implemented**: [WHATS_NOT_IMPLEMENTED.md](WHATS_NOT_IMPLEMENTED.md)
+- **Deployment Guide**: [DEPLOYMENT.md](DEPLOYMENT.md)
+- **Architecture**: [/.github/copilot-instructions.md](/.github/copilot-instructions.md)
+
+---
+
+**Last Updated**: January 1, 2026

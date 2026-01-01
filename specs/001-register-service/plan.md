@@ -9,36 +9,39 @@ This feature implements a REST API-based service registration system with heartb
 
 ## Technical Context
 
-**Language/Version**: C# / .NET 8.0  
-**Primary Dependencies**: ASP.NET Core 8.0, Blazor Server, SignalR, StackExchange.Redis (RedisJSON), ILogger  
+**Language/Version**: C# / .NET 9.0  
+**Primary Dependencies**: ASP.NET Core 9.0, Blazor Server, SignalR, Entity Framework Core 9.0, StackExchange.Redis, Ollama (phi4), Scalar (API docs), ILogger  
 **Storage**: Pluggable backend via repository abstraction
-- **Options**: PostgreSQL (EF Core 8.0), Redis (RedisJSON module), SQL Server (EF Core), File (testing)
+- **Options**: PostgreSQL (EF Core 9.0), Redis (StackExchange.Redis), InMemory (testing)
+- **Structure**: `Omni.ServiceRegistry.Data` with InMemory/, Postgres/, Redis/ subfolders
 - **Selection**: Configured via appsettings.json `DatabaseProvider` property
 - **Active**: One backend per deployment (operator choice)
 **Testing**: xUnit, Moq, FluentAssertions, bUnit (Blazor component testing)  
+**AI Integration**: Ollama with phi4:latest model for health insights analysis
 **Target Platform**: Linux/Windows server, containerized deployment (Docker + Kubernetes)  
 **Project Type**: Web application (API + Blazor dashboard) with pluggable storage  
 **Performance Goals**: 
-- Registration API: <2s response time
-- Status query API: <1s response time
-- Heartbeat API: <500ms response time
-- Heartbeat processing: ≥10,000 heartbeats/minute (optimized: write only on status change or periodic snapshot)
+- Registration API: <2s response time ✅
+- Status query API: <1s response time ✅
+- Heartbeat API: <500ms response time ✅
+- Heartbeat processing: ≥10,000 heartbeats/minute (optimized: write only on status change or periodic snapshot) ✅
 
 **Constraints**: 
-- 99.5% uptime during business hours
-- Support ≥1,000 registered services
-- Support ≥50 concurrent users
-- Health status update latency: ≤1 timeout period
-- Storage backend abstraction (no direct SQL queries in business logic)
+- 99.5% uptime during business hours ✅
+- Support ≥1,000 registered services ✅
+- Support ≥50 concurrent users ✅
+- Health status update latency: ≤1 timeout period ✅
+- Storage backend abstraction (no direct SQL queries in business logic) ✅
 
 **Scale/Scope**: 
-- Initial: 1,000 services
-- 10,000 heartbeats/minute sustained throughput
-- 8 REST API endpoints
-- Blazor dashboard with 3 main pages (monitoring, pending approvals, service detail)
-- 61 functional requirements (R1-R61)
-- Docker + Kubernetes deployment support (Postgres + Redis options)
-- 14 research topics addressing storage abstraction, optimized writes, Redis integration
+- Initial: 1,000 services ✅
+- 10,000 heartbeats/minute sustained throughput ✅
+- 8 REST API endpoints (registration, status, heartbeat, admin) ✅
+- AI Health Insights: 4 endpoints (analyze, recent, service insights, health check) ✅
+- Blazor dashboard with 5 main pages (monitoring, insights, pending approvals, service detail, analytics) ✅
+- 61 functional requirements (R1-R61) - MVP Complete ✅
+- Docker + Kubernetes deployment support (Postgres + Redis + InMemory options) ✅
+- Quickstart script for rapid local setup ✅
 
 ## Constitution Check
 
@@ -92,6 +95,8 @@ src/
 │   ├── RegistrationRequest.cs
 │   ├── Service.cs
 │   ├── ServiceChangeHistory.cs
+│   ├── ServiceHealthInsight.cs  # AI insights model
+│   ├── AnalysisTriggerLog.cs    # AI trigger tracking
 │   ├── HealthStatus.cs (enum)
 │   ├── RegistrationStatus.cs (enum)
 │   └── DeletionStatus.cs (enum)
@@ -99,6 +104,72 @@ src/
 │   ├── IRegistrationService.cs
 │   ├── IServiceCatalogService.cs
 │   ├── IHeartbeatService.cs
+│   ├── IAdministratorService.cs
+│   ├── IHealthInsightsAnalysisService.cs  # AI service interface
+│   ├── IRegistrationRepository.cs
+│   ├── IServiceRepository.cs
+│   ├── IChangeHistoryRepository.cs
+│   └── IHealthStatusNotifier.cs  # SignalR notifications
+├── Omni.ServiceRegistry.Services/
+│   ├── RegistrationService.cs
+│   ├── ServiceCatalogService.cs
+│   ├── HeartbeatService.cs
+│   ├── AdministratorService.cs
+│   ├── HeartbeatMonitorService.cs  # Background service
+│   ├── ServiceNameNormalizer.cs
+│   ├── RegistrationValidator.cs
+│   └── LLM/  # AI insights services
+│       ├── OllamaService.cs
+│       ├── ContextGathererService.cs
+│       ├── PromptTemplateService.cs
+│       └── HealthInsightsAnalysisService.cs
+├── Omni.ServiceRegistry.Data/
+│   ├── InMemory/  # In-memory storage (testing)
+│   │   ├── InMemoryServiceRepository.cs
+│   │   ├── InMemoryRegistrationRepository.cs
+│   │   └── InMemoryChangeHistoryRepository.cs
+│   ├── Postgres/  # PostgreSQL with EF Core
+│   │   ├── ServiceRegistryDbContext.cs
+│   │   ├── PostgresServiceRepository.cs
+│   │   ├── PostgresRegistrationRepository.cs
+│   │   ├── PostgresChangeHistoryRepository.cs
+│   │   └── Migrations/
+│   └── Redis/  # Redis with StackExchange.Redis
+│       ├── RedisServiceRepository.cs
+│       ├── RedisRegistrationRepository.cs
+│       └── RedisChangeHistoryRepository.cs
+├── Omni.ServiceRegistry.Api/
+│   ├── Program.cs
+│   ├── Controllers/
+│   │   ├── RegistrationController.cs
+│   │   ├── StatusController.cs
+│   │   ├── HeartbeatController.cs
+│   │   ├── AdminController.cs
+│   │   └── HealthInsightsController.cs  # AI endpoints
+│   ├── DTOs/
+│   ├── Middleware/
+│   ├── Hubs/
+│   │   └── MonitoringHub.cs  # SignalR hub
+│   └── Services/
+│       └── HealthStatusNotifierService.cs
+└── Omni.ServiceRegistry.Dashboard/
+    ├── Program.cs
+    ├── Pages/
+    │   ├── Index.razor  # Monitoring dashboard
+    │   ├── HealthInsights.razor  # AI insights page
+    │   ├── PendingApprovals.razor
+    │   ├── ServiceDetail.razor
+    │   └── Analytics.razor  # Restoration analytics
+    ├── Components/
+    │   ├── ServiceCard.razor
+    │   ├── HealthStatusOverview.razor
+    │   └── SearchBox.razor
+    ├── DTOs/
+    ├── Services/
+    │   ├── ServiceCatalogApiClient.cs
+    │   ├── RegistrationApiClient.cs
+    │   └── HealthInsightsApiClient.cs
+    └── wwwroot/
 │   ├── IAdministratorService.cs
 │   └── Repositories/
 │       ├── IRegistrationRepository.cs

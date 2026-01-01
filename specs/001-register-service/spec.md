@@ -2,31 +2,39 @@
 
 **Feature ID**: 1-register-service  
 **Created**: November 9, 2025  
-**Status**: Draft  
+**Updated**: January 1, 2026  
+**Status**: ✅ Complete (MVP + AI Insights)  
 
 ## Overview
 
-Enable services to automatically register themselves into the platform's service registry via REST API, making them discoverable and manageable within the system. This feature provides a centralized, automated way to onboard new services with their metadata and operational details through API integration. Additionally, the platform monitors registered services through a heartbeat-based health monitoring system to track service availability and health status in real-time.
+Enable services to automatically register themselves into the platform's service registry via REST API, making them discoverable and manageable within the system. This feature provides a centralized, automated way to onboard new services with their metadata and operational details through API integration. The platform monitors registered services through a heartbeat-based health monitoring system to track service availability and health status in real-time. Additionally, **AI-powered health insights** analyze service health patterns using Ollama (phi4 model) to provide intelligent root cause analysis and actionable recommendations.
 
 ## Problem Statement
 
-Organizations need an automated way to register and catalog their services as part of the deployment process, along with continuous monitoring of service health. Currently, there is no standardized API-based process for service onboarding and health tracking, leading to inconsistent service metadata, difficulty in tracking what services exist in the environment, and lack of visibility into service health status. Manual registration processes are error-prone and slow down service deployment, while the absence of automated health monitoring makes it difficult to detect and respond to service failures.
+Organizations need an automated way to register and catalog their services as part of the deployment process, along with continuous monitoring of service health. Currently, there is no standardized API-based process for service onboarding and health tracking, leading to inconsistent service metadata, difficulty in tracking what services exist in the environment, and lack of visibility into service health status. Manual registration processes are error-prone and slow down service deployment, while the absence of automated health monitoring makes it difficult to detect and respond to service failures. Furthermore, when health issues occur, administrators lack intelligent analysis tools to quickly understand root causes and correlations across services.
 
 ## Target Users
 
 - **Service Owners**: Teams responsible for developing and maintaining services who need to register their services
 - **Platform Administrators**: Personnel who oversee service registration approval and manage the service catalog
 - **Service Consumers**: Teams or systems that need to discover and interact with registered services
+- **Operations/SRE Teams**: Personnel who need intelligent health insights and root cause analysis for faster incident response
 
 ## Clarifications
 
 ### Session 2025-11-09
 
-- Q: How do administrators get notified of pending registrations? → A: Administrators poll a dedicated API endpoint/dashboard to view pending registrations
-- Q: How are services removed from the catalog? → A: Service owners or administrators request deletion via `/api/v1/delete/{id}` which requires approval; services are soft-deleted and marked "DELETED"; DEAD services remain DEAD until deletion is requested; re-registration requires new ID
-- Q: What authentication/authorization mechanism is used for API access? → A: Deferred to P2 (Priority 2) - marked as Open Issue; assumes existing authentication infrastructure for initial implementation
-- Q: What observability/logging requirements are needed? → A: Basic application logging using ILogger with tracing, info, warning, and error levels
-- Q: How are concurrent/duplicate registration requests handled? → A: Allow concurrent requests with idempotency; use service name hash (normalized to lowercase) to prevent duplicates; return existing registration ID if pending; store original name for debugging
+- Q: How do administrators get notified of pending registrations? → A: Administrators access Blazor dashboard at http://localhost:5083 to view pending registrations with real-time SignalR updates ✅
+- Q: How are services removed from the catalog? → A: Service owners or administrators request deletion via `/api/v1/delete/{id}` which requires approval; services are soft-deleted and marked "DELETED"; re-registration requires new ID ✅
+- Q: What authentication/authorization mechanism is used for API access? → A: Deferred to P2 (Priority 2) - marked as Open Issue; assumes existing authentication infrastructure for initial implementation ⚠️
+- Q: What observability/logging requirements are needed? → A: ILogger with structured logging (trace, info, warning, error levels); logs all registration, approval, status transitions, heartbeat events ✅
+- Q: How are concurrent/duplicate registration requests handled? → A: Idempotency via service name hash (SHA256 of lowercase name); return existing registration ID if pending; database unique constraint on normalized name ✅
+
+### Session 2025-12-31
+
+- Q: How do administrators get intelligent insights about service health? → A: AI Health Insights using Ollama (phi4 model) analyzes health patterns, correlations, and provides root cause analysis with recommendations ✅
+- Q: How are insights triggered? → A: Dashboard "✨ AI Analysis" button triggers global analysis; background analysis on critical events; on-demand per-service analysis via API ✅
+- Q: What LLM is used? → A: Ollama with phi4:latest model (14.7B parameters, Q4_K_M quantization) running locally on port 11434 ✅
 
 ## User Scenarios & Testing
 

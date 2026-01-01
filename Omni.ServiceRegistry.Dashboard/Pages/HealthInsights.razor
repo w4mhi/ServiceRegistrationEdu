@@ -1,4 +1,5 @@
 @page "/insights"
+@rendermode InteractiveServer
 @implements IDisposable
 @using Microsoft.AspNetCore.Components.Web
 @using Omni.ServiceRegistry.Dashboard.DTOs
@@ -67,7 +68,7 @@
                 HealthInsightDto latestInsight = serviceGroup.First();
                 bool isExpanded = expandedGroups.Contains(serviceName);
                 
-                <div class="insight-group mb-3">
+                <div class="insight-group mb-3" @key="serviceName">
                     <div class="insight-group-header @GetInsightSeverityClass(latestInsight)" 
                          @onclick="@(() => ToggleGroup(serviceName))"
                          style="cursor: pointer; padding: 1rem; border-radius: 8px; border: 1px solid #dee2e6;">
@@ -90,7 +91,7 @@
                         </div>
                     </div>
                     
-                    <div class="collapse-content @(isExpanded ? "show" : "")"
+                    <div class="collapse-content @(isExpanded ? "show" : "")">
                         @foreach (HealthInsightDto insight in serviceGroup.OrderByDescending(i => i.GeneratedAt))
                         {
                             <div class="insight-card @GetInsightSeverityClass(insight)" style="margin-top: 0.5rem;">                
@@ -221,8 +222,7 @@
         }
         else
         {
-            expandedGroups.Add(serviceName
-            }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+            expandedGroups.Add(serviceName);
         }
     }
 
@@ -323,6 +323,6 @@
             "Manual" => "bg-primary",
             "Automatic" => "bg-info",
             _ => "bg-secondary"
- indow.initializeCollapses();
+        };
     }
-</script>
+}

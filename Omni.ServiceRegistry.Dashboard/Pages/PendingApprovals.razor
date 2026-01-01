@@ -72,7 +72,7 @@
                     <p>Loading registrations...</p>
                 </div>
             }
-            else if (pendingRegistrations.Count == 0)
+            else if (pendingRegistrations?.Count == 0)
             {
                 <div class="empty-state-modern">
                     <i class="bi bi-check-circle" style="color: #16a34a;"></i>
@@ -425,10 +425,10 @@
 
 @if (showApprovalModal)
 {
-    <div class="modal modal-modern show d-block" tabindex="-1">
+    <div class="modal modal-unified show d-block" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
+                <div class="modal-header modal-header-approve">
                     <h5 class="modal-title"><i class="bi bi-check-circle-fill me-2"></i>Approve Registration</h5>
                     <button type="button" class="btn-close" @onclick="CloseModals"></button>
                 </div>
@@ -441,8 +441,8 @@
                         </div>
                     }
                     <div class="mb-3">
-                        <label class="form-label">Comments (optional)</label>
                         <textarea class="form-control" rows="3" @bind="approvalComments" placeholder="Add any notes or comments..."></textarea>
+                        <label class="form-label mt-1">Comments (optional)</label>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -468,16 +468,16 @@
 
 @if (showBulkApprovalModal)
 {
-    <div class="modal modal-modern show d-block" tabindex="-1">
+    <div class="modal modal-unified show d-block" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
+                <div class="modal-header modal-header-approve">
                     <h5 class="modal-title"><i class="bi bi-check-all me-2"></i>Approve All Registrations</h5>
                     <button type="button" class="btn-close" @onclick="CloseModals"></button>
                 </div>
                 <div class="modal-body">
                     <p style="font-size: 1.05rem; color: #1e293b; margin-bottom: 1.5rem;">
-                        Are you sure you want to approve <strong>@(pendingRegistrations?.Count ?? 0)</strong> registration(s)?
+                        Are you sure you want to approve <strong>@bulkApprovalCount</strong> registration(s)?
                     </p>
                     
                     @if (!string.IsNullOrEmpty(bulkApprovalResultMessage))
@@ -542,10 +542,10 @@
 
 @if (showDenialModal)
 {
-    <div class="modal modal-modern show d-block" tabindex="-1">
+    <div class="modal modal-unified show d-block" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
+                <div class="modal-header modal-header-deny">
                     <h5 class="modal-title"><i class="bi bi-x-circle-fill me-2"></i>Deny Registration</h5>
                     <button type="button" class="btn-close" @onclick="CloseModals"></button>
                 </div>
@@ -588,10 +588,10 @@
 
 @if (showDeletionApprovalModal)
 {
-    <div class="modal modal-modern show d-block" tabindex="-1">
+    <div class="modal modal-unified show d-block" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
+                <div class="modal-header modal-header-delete">
                     <h5 class="modal-title"><i class="bi bi-trash-fill me-2"></i>Delete Service</h5>
                     <button type="button" class="btn-close" @onclick="CloseModals"></button>
                 </div>
@@ -636,10 +636,10 @@
 
 @if (showHistoryModal)
 {
-    <div class="modal modal-modern show d-block" tabindex="-1">
+    <div class="modal modal-unified show d-block" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
-                <div class="modal-header">
+                <div class="modal-header modal-header-neutral">
                     <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>Deletion & Restoration History</h5>
                     <button type="button" class="btn-close" @onclick="CloseHistoryModal"></button>
                 </div>
@@ -768,10 +768,10 @@
 
 @if (showRestoreModal)
 {
-    <div class="modal modal-modern show d-block" tabindex="-1">
+    <div class="modal modal-unified show d-block" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
+                <div class="modal-header modal-header-restore">
                     <h5 class="modal-title"><i class="bi bi-arrow-counterclockwise me-2"></i>Restore Service</h5>
                     <button type="button" class="btn-close" @onclick="CloseRestoreModal"></button>
                 </div>
@@ -898,10 +898,10 @@
 <!-- Validation Results Modal -->
 @if (showValidationModal)
 {
-    <div class="modal show d-block" tabindex="-1">
+    <div class="modal modal-unified show d-block" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content" style="border-radius: 1rem; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);">
-                <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-top-left-radius: 1rem; border-top-right-radius: 1rem;">
+            <div class="modal-content">
+                <div class="modal-header modal-header-validate">
                     <h5 class="modal-title"><i class="bi bi-check2-square me-2"></i>Contract Validation Results</h5>
                     <button type="button" class="btn-close btn-close-white" @onclick="CloseValidationModal"></button>
                 </div>
@@ -918,7 +918,7 @@
                     else if (validationResult != null)
                     {
                         <!-- Validation Summary -->
-                        <div class="mb-4 p-3" style="background: @(validationResult.Status == "Passed" ? "#f0fdf4" : "#fef2f2"); border-left: 4px solid @(validationResult.Status == "Passed" ? "#22c55e" : "#ef4444"); border-radius: 0.5rem;">
+                        <div class="mb-4 p-3" style="background: #f8f7ff; border-left: 4px solid #8b5cf6; border-radius: 0.5rem;">
                             <div class="d-flex align-items-center mb-2">
                                 <i class="bi @(validationResult.Status == "Passed" ? "bi-check-circle-fill" : "bi-x-circle-fill") me-2" 
                                    style="font-size: 1.5rem; color: @(validationResult.Status == "Passed" ? "#22c55e" : "#ef4444");"></i>
@@ -948,19 +948,19 @@
                             <h6 style="color: #475569; font-weight: 600; margin-bottom: 1rem;">Endpoint Checks:</h6>
                             @foreach (var check in validationResult.EndpointChecks)
                             {
-                                <div class="mb-3 p-3" style="background: #f8fafc; border-radius: 0.5rem; border-left: 3px solid @(check.IsReachable ? "#22c55e" : "#ef4444");">
+                                <div class="mb-3 p-3" style="background: #f8fafc; border-radius: 0.5rem; border-left: 3px solid @(check.IsReachable ? "#8b5cf6" : "#ef4444");">
                                     <div class="d-flex justify-content-between align-items-start mb-2">
                                         <div class="d-flex align-items-center">
                                             <i class="bi @(check.IsReachable ? "bi-check-circle-fill" : "bi-x-circle-fill") me-2" 
-                                               style="color: @(check.IsReachable ? "#22c55e" : "#ef4444");"></i>
+                                               style="color: @(check.IsReachable ? "#8b5cf6" : "#ef4444");"></i>
                                             <code style="background: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.875rem;">@check.Endpoint</code>
                                         </div>
                                         @if (check.IsReachable)
                                         {
-                                            <span class="badge bg-success">@(check.ResponseTimeMs)ms</span>
+                                            <span class="badge" style="background: #8b5cf6; color: white;">@(check.ResponseTimeMs)ms</span>
                                         }
                                     </div>
-                                    <div style="font-size: 0.875rem; color: @(check.IsReachable ? "#059669" : "#dc2626"); font-weight: 500;">
+                                    <div style="font-size: 0.875rem; color: @(check.IsReachable ? "#7c3aed" : "#dc2626"); font-weight: 500;">
                                         @check.Message
                                     </div>
                                 </div>
@@ -985,7 +985,10 @@
                     }
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" @onclick="CloseValidationModal">Close</button>
+                    <button type="button" class="btn-modal-cancel" @onclick="CloseValidationModal">
+                        <i class="bi bi-x-lg me-1"></i>
+                        <span>Close</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -1016,6 +1019,7 @@
     private string bulkApprovalComments = "";
     private string bulkApprovalResultMessage = "";
     private bool bulkApprovalSuccess = false;
+    private int bulkApprovalCount = 0;
     private ValidationResultDto? validationResult = null;
 
     private List<RegistrationRequest> pendingRegistrations => 
@@ -1191,7 +1195,8 @@
 
     private void ShowBulkApprovalModal()
     {
-        Logger.LogInformation("ShowBulkApprovalModal called for {Count} registrations", pendingRegistrations.Count);
+        bulkApprovalCount = pendingRegistrations.Count;
+        Logger.LogInformation("ShowBulkApprovalModal called for {Count} registrations", bulkApprovalCount);
         bulkApprovalComments = "Bulk approved by admin";
         errorMessage = null;
         bulkApprovalResultMessage = "";

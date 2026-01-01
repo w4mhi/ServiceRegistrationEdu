@@ -16,7 +16,7 @@
 <!-- AI Analysis Status Panel -->
 @if (isAnalyzing)
 {
-    <div class="position-fixed" style="top: 0; left: 0; right: 0; z-index: 9998; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+    <div style="background: #667eea; color: white; padding: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin: 3rem -2rem 2rem -2rem;">
         <div class="container-fluid">
             <div class="d-flex align-items-center justify-content-between">
                 <div class="d-flex align-items-center gap-3">
@@ -55,7 +55,7 @@
     </div>
 }
 
-<div class="page-header-modern" style="@(isAnalyzing ? "margin-top: 80px;" : "")">
+<div class="page-header-modern">
     <h1 class="page-title-modern">📊 Service Registry Dashboard</h1>
     <div style="display: flex; gap: 1rem;">
         <button class="btn btn-ai-analysis" 
@@ -257,7 +257,7 @@
                                     @if (apiEndpoints.Count > 0)
                                     {
                                         <button class="btn btn-sm" 
-                                                style="background: @(showApiModal && selectedServiceId == service.ServiceId ? "#f97316" : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"); color: white; border: none; font-size: 0.9rem; padding: 0.4rem 0.8rem; transition: all 0.3s ease;"
+                                                style="background: @(showApiModal && selectedServiceId == service.ServiceId ? "#f97316" : "#667eea"); color: white; border: none; border-radius: 0.5rem; font-size: 0.9rem; padding: 0.4rem 0.8rem; transition: all 0.3s ease;"
                                                 @onclick="@(() => ShowApiEndpoints(service.ServiceId, service.ServiceName, apiEndpoints))"
                                                 title="Click to view API endpoints">
                                             <i class="bi bi-list-ul me-1"></i>@apiEndpoints.Count APIs
@@ -302,25 +302,25 @@
 <!-- API Endpoints Modal -->
 @if (showApiModal)
 {
-    <div class="modal show d-block" tabindex="-1">
+    <div class="modal modal-unified show d-block" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content" style="border-radius: 1rem; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);">
-                <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-top-left-radius: 1rem; border-top-right-radius: 1rem;">
-                    <h5 class="modal-title"><i class="bi bi-code-slash me-2"></i>API Endpoints - @selectedServiceName</h5>
+            <div class="modal-content">
+                <div class="modal-header modal-header-orange">
+                    <h5 class="modal-title"><i class="bi bi-list-ul me-2"></i>API Endpoints - @selectedServiceName</h5>
                     <button type="button" class="btn-close btn-close-white" @onclick="CloseApiModal"></button>
                 </div>
-                <div class="modal-body" style="padding: 2rem;">
+                <div class="modal-body">
                     @if (selectedApiEndpoints != null && selectedApiEndpoints.Count > 0)
                     {
                         <div class="mb-3">
-                            <span class="badge" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-size: 1rem; padding: 0.5rem 1rem;">
+                            <span class="badge" style="background: #f97316; color: white; font-size: 1rem; padding: 0.5rem 1rem;">
                                 @selectedApiEndpoints.Count Total Endpoints
                             </span>
                         </div>
                         
                         @foreach (var endpoint in selectedApiEndpoints)
                         {
-                            <div class="mb-3 p-3" style="background: #f8fafc; border-left: 4px solid #667eea; border-radius: 0.5rem;">
+                            <div class="mb-3 p-3" style="background: #f8fafc; border-left: 4px solid #f97316; border-radius: 0.5rem;">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <div>
                                         <span class="badge" style="background: @GetMethodColor(endpoint.Method); color: white; font-weight: 700; min-width: 70px; text-align: center;">
@@ -345,13 +345,10 @@
                         <p style="color: #64748b; text-align: center;">No API endpoints available</p>
                     }
                 </div>
-                <div class="modal-footer" style="border-top: 1px solid #e2e8f0; padding: 1.5rem;">
-                    <button type="button" class="btn" 
-                            style="background: #6b7280; color: white; padding: 0.5rem 1.5rem; border-radius: 0.5rem; font-weight: 600; border: none; transition: all 0.2s ease;"
-                            onmouseover="this.style.background='#4b5563'"
-                            onmouseout="this.style.background='#6b7280'"
-                            @onclick="CloseApiModal">
-                        Close
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal-cancel" @onclick="CloseApiModal">
+                        <i class="bi bi-x-lg me-1"></i>
+                        <span>Close</span>
                     </button>
                 </div>
             </div>
@@ -424,7 +421,7 @@
         
         HubClient.OnAnalysisCompleted(async (serviceId, insightId, completedAt) =>
         {
-            await InvokeAsync(async () =>
+            await InvokeAsync(() =>
             {
                 // Don't modify isAnalyzing here - let the local button handler manage it
                 StateHasChanged();
@@ -647,6 +644,37 @@
 
         try
         {
+            // Stage 0: Check Ollama health with timeout
+            analysisStatus = "🔍 Checking Ollama availability...";
+            analysisProgress = 5;
+            StateHasChanged();
+            
+            bool isOllamaReady = false;
+            int maxRetries = 6; // 30 seconds total (6 * 5s)
+            int retryCount = 0;
+            
+            while (!isOllamaReady && retryCount < maxRetries)
+            {
+                isOllamaReady = await InsightsClient.CheckOllamaHealthAsync();
+                if (!isOllamaReady)
+                {
+                    retryCount++;
+                    analysisStatus = $"⏳ Waiting for Ollama to start... ({retryCount}/{maxRetries})";
+                    StateHasChanged();
+                    await Task.Delay(5000);
+                }
+            }
+            
+            if (!isOllamaReady)
+            {
+                analysisMessage = "❌ Ollama service is not available. Please ensure Ollama is running and try again.";
+                analysisMessageType = "danger";
+                StateHasChanged();
+                await Task.Delay(5000);
+                analysisMessage = null;
+                return;
+            }
+            
             // Stage 1: Queueing analysis
             analysisStatus = "📋 Queueing analysis request...";
             analysisProgress = 10;

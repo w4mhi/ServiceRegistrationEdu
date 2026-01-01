@@ -32,4 +32,9 @@ public interface IHealthInsightsAnalysisService
     /// Check if analysis should be skipped (noise reduction)
     /// </summary>
     Task<bool> ShouldSkipAnalysisAsync(Guid serviceId, string reason);
+
+    /// <summary>
+    /// Check if Ollama service is healthy and ready to process requests
+    /// </summary>
+    Task<bool> CheckOllamaHealthAsync();
 }

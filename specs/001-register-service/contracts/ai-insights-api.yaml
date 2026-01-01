@@ -1,0 +1,327 @@
+openapi: 3.0.3
+info:
+  title: AI Health Insights API
+  description: API endpoints for triggering and retrieving AI-powered health analysis using Ollama
+  version: 1.0.0
+  contact:
+    name: Platform Team
+    email: platform@example.com
+
+servers:
+  - url: https://api.platform.example.com/api/v1
+    description: Production
+  - url: https://api-staging.platform.example.com/api/v1
+    description: Staging
+  - url: http://localhost:5159/api/v1
+    description: Local Development
+
+tags:
+  - name: AI Insights
+    description: AI-powered health analysis and insights
+
+paths:
+  /insights/analyze:
+    post:
+      tags:
+        - AI Insights
+      summary: Trigger AI health analysis
+      description: |
+        Triggers an AI-powered health analysis using Ollama (phi4 model). Can analyze specific service
+        or perform global analysis across all services. Returns insights including root cause analysis,
+        correlations, historical context, and actionable recommendations.
+        
+        **Rate Limiting**: 60-second cooldown per user to prevent excessive LLM calls.
+      operationId: triggerAnalysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalysisTriggerRequest'
+            examples:
+              globalAnalysis:
+                summary: Global analysis across all services
+                value:
+                  globalAnalysis: true
+              serviceAnalysis:
+                summary: Single service analysis
+                value:
+                  serviceId: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+                  globalAnalysis: false
+      responses:
+        '202':
+          description: Analysis triggered successfully (processing asynchronously)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisTriggerResponse'
+              example:
+                message: "Analysis started"
+                triggeredAt: "2026-01-01T10:30:00Z"
+                estimatedDuration: "15-30 seconds"
+        '400':
+          description: Invalid request (missing serviceId or globalAnalysis flag)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many requests (cooldown active)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Rate limit exceeded"
+                message: "Please wait 45 seconds before triggering another analysis"
+        '503':
+          description: Ollama service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Service unavailable"
+                message: "Ollama is not responding. Please ensure Ollama is running on port 11434."
+
+  /insights/recent:
+    get:
+      tags:
+        - AI Insights
+      summary: Get recent insights
+      description: Retrieves the most recent AI-generated health insights across all services
+      operationId: getRecentInsights
+      parameters:
+        - name: count
+          in: query
+          description: Number of recent insights to retrieve (max 50)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Recent insights retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecentInsightsResponse'
+        '400':
+          description: Invalid count parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /insights/service/{serviceId}:
+    get:
+      tags:
+        - AI Insights
+      summary: Get insights for specific service
+      description: Retrieves AI-generated health insights for a specific service
+      operationId: getServiceInsights
+      parameters:
+        - name: serviceId
+          in: path
+          description: Service ID (UUID)
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Service insights retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceHealthInsight'
+        '404':
+          description: Service not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /insights/health/ollama:
+    get:
+      tags:
+        - AI Insights
+      summary: Check Ollama service health
+      description: Verifies that Ollama service is available and responding
+      operationId: checkOllamaHealth
+      responses:
+        '200':
+          description: Ollama health status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OllamaHealthResponse'
+              examples:
+                healthy:
+                  summary: Ollama is healthy
+                  value:
+                    isHealthy: true
+                    message: "Ollama is running and responsive"
+                    baseUrl: "http://localhost:11434"
+                    model: "phi4"
+                unhealthy:
+                  summary: Ollama is unavailable
+                  value:
+                    isHealthy: false
+                    message: "Ollama is not responding. Ensure it's running on port 11434."
+                    baseUrl: "http://localhost:11434"
+                    model: "phi4"
+
+components:
+  schemas:
+    AnalysisTriggerRequest:
+      type: object
+      properties:
+        serviceId:
+          type: string
+          format: uuid
+          description: Service ID to analyze (omit for global analysis)
+          example: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+        globalAnalysis:
+          type: boolean
+          description: Trigger global analysis across all services
+          default: false
+          example: true
+      required:
+        - globalAnalysis
+
+    AnalysisTriggerResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Analysis started"
+        triggeredAt:
+          type: string
+          format: date-time
+          example: "2026-01-01T10:30:00Z"
+        estimatedDuration:
+          type: string
+          example: "15-30 seconds"
+
+    RecentInsightsResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 20
+        insights:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceHealthInsight'
+
+    ServiceHealthInsight:
+      type: object
+      properties:
+        insightId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+        serviceId:
+          type: string
+          format: uuid
+          example: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+        serviceName:
+          type: string
+          example: "payment-service"
+        generatedAt:
+          type: string
+          format: date-time
+          example: "2026-01-01T10:35:42Z"
+        triggerType:
+          type: string
+          enum: [Manual, CriticalEvent, ScheduledBatch]
+          example: "Manual"
+        triggeredBy:
+          type: string
+          example: "admin@example.com"
+        summary:
+          type: string
+          example: "Service experiencing intermittent connectivity issues"
+        rootCauses:
+          type: array
+          items:
+            type: string
+          example:
+            - "Network timeout to database"
+            - "Connection pool exhaustion"
+        correlatedServices:
+          type: array
+          items:
+            type: string
+          example:
+            - "database-service"
+            - "cache-service"
+        historicalContext:
+          type: string
+          example: "Similar issues occurred 3 times in the past 7 days"
+        recommendations:
+          type: array
+          items:
+            type: string
+          example:
+            - "Increase connection pool size to 50"
+            - "Add circuit breaker for database calls"
+            - "Implement exponential backoff retry policy"
+        confidenceScore:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          example: 0.85
+        tokensUsed:
+          type: integer
+          example: 3842
+        processingTimeMs:
+          type: integer
+          example: 12450
+
+    OllamaHealthResponse:
+      type: object
+      properties:
+        isHealthy:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Ollama is running and responsive"
+        baseUrl:
+          type: string
+          example: "http://localhost:11434"
+        model:
+          type: string
+          example: "phi4"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Invalid request"
+        message:
+          type: string
+          example: "Either serviceId or globalAnalysis=true must be provided"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-01-01T10:30:00Z"
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT authentication (deferred to P2)

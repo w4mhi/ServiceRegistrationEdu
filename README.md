@@ -15,21 +15,25 @@ The Service Registry enables services to automatically register with the platfor
 - **Service Registration**: REST API endpoints for service registration with validation
 - **Administrator Approval**: Workflow for reviewing and approving/denying registrations
 - **Heartbeat Monitoring**: Health tracking with configurable timeout and degradation thresholds
-- **Real-Time Dashboard**: Live updates via SignalR (no polling)
+- **AI Health Insights**: LLM-powered analysis using Ollama (phi4 model) for intelligent health recommendations
+- **Real-Time Dashboard**: Live updates via SignalR (no polling) with interactive UI
 - **State Machine Health Tracking**: HEALTHY → UNHEALTHY → DEGRADED → DEAD → RECOVERED transitions
 - **Pluggable Storage**: PostgreSQL, Redis, or In-Memory backends
 - **Performance Monitoring**: Request execution time logging with targets (<500ms heartbeat)
 - **Production Security**: HSTS, CSP, X-Frame-Options, Rate Limiting
 - **Idempotent Registration**: Duplicate service name detection
-- **Soft Delete**: Service removal without data loss
+- **Soft Delete**: Service removal without data loss and restoration support
 - **API Documentation**: OpenAPI 3.0 with Scalar interactive UI
+- **Service Deletion**: Complete workflow with admin approval and soft delete
+- **Recently Restored Badge**: Visual indicators for restored services with expiration
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - .NET 9.0 SDK
-- PostgreSQL 15+ OR Redis 7.0+ (for persistent storage)
+- PostgreSQL 15+ (for persistent storage)
+- Ollama with phi4 model (for AI insights)
 - Docker (optional)
 
 ### Run with Quick Start Script
@@ -40,12 +44,14 @@ The Service Registry enables services to automatically register with the platfor
 
 This starts:
 - ✅ PostgreSQL database (Docker)
+- ✅ Ollama with phi4 model (Docker)
 - ✅ Service Registry API on http://localhost:5159
-- ✅ Dashboard on http://localhost:5083
+- ✅ Dashboard on http://localhost:5155
 
-**Access:**
-- **Dashboard**: http://localhost:5083
+**Access:**155
 - **API Docs**: http://localhost:5159/scalar/v1
+- **Health Check**: http://localhost:5159/health
+- **AI Insights**: Click "✨ AI Analysis" button on dashboard
 - **Health Check**: http://localhost:5159/health
 
 ### Manual Setup
@@ -98,6 +104,8 @@ dotnet run
 | [🚢 Deployment Guide](Documentation/DEPLOYMENT.md) | Docker, Kubernetes deployment instructions |
 | [🏗️ Architecture](.github/copilot-instructions.md) | System design and technical architecture |
 | [⚡ Quick Reference](Documentation/QUICK_REFERENCE.md) | Common commands and configurations |
+| [🤖 AI Insights](Documentation/AI_INSIGHTS_COMPLETE.md) | LLM-powered health analysis documentation |
+| [🚫 What's Not Implemented](Documentation/WHATS_NOT_IMPLEMENTED.md) | Known limitations and future work |
 | [🧪 Client Simulator](Documentation/CLIENT_SIMULATOR_GUIDE.md) | Testing tool for service registration |
 
 ## 🏗️ Architecture
@@ -107,6 +115,7 @@ dotnet run
 | Layer | Technology |
 |-------|-----------|
 | **Language** | C# 10.0+ |
+| **AI/LLM** | Ollama (phi4 model) |
 | **Framework** | .NET 9.0 |
 | **Web API** | ASP.NET Core 9.0 |
 | **Dashboard** | Blazor Server + SignalR |
@@ -247,6 +256,12 @@ curl http://localhost:5159/api/v1/catalog?healthStatus=Healthy
 | POST | `/api/v1/admin/registrations/{id}/deny` | Deny registration |
 | GET | `/api/v1/admin/registrations/pending` | List pending registrations |
 | POST | `/api/v1/heartbeat/{serviceId}` | Send heartbeat signal |
+| POST | `/api/v1/admin/deletions/{id}/approve` | Approve deletion |
+| GET | `/api/v1/admin/deletions/pending` | List pending deletions |
+| POST | `/api/v1/admin/services/{id}/restore` | Restore deleted service |
+| POST | `/api/v1/insights/analyze` | Trigger AI health analysis |
+| GET | `/api/v1/insights/recent` | Get recent AI insights |
+| GET | `/api/v1/insights/service/{id}` | Get insights for service |
 | GET | `/api/v1/status/service/{id}` | Get service details |
 | GET | `/api/v1/catalog` | Get all services |
 | POST | `/api/v1/delete/{id}` | Request service deletion |
@@ -347,12 +362,16 @@ HEALTHY
 - **Content Security Policy**: Strict default-src 'self'
 - **X-Frame-Options**: DENY (clickjacking protection)
 - **X-Content-Type-Options**: nosniff
-- **Referrer Policy**: strict-origin-when-cross-origin
-- **Permissions Policy**: Restricts camera, geolocation, microphone
-- **Rate Limiting**:
-  - Registration: 10 requests/minute (sliding window)
-  - Heartbeat: 200 requests/second (fixed window)
-
+- **AI Health Insights**: LLM-powered analysis with root cause detection, recommendations, and historical context
+- **Service Count Cards**: Aggregated statistics by health status (clickable for filtering)
+- **Filterable Service Table**: Search and filter by status, name, owner with API endpoint display
+- **Pending Approvals**: Review and approve/deny registrations with validation, bulk approval support
+- **Service Details**: Deep dive into heartbeat history, configuration, timeline, and change audit log
+- **Service Deletion**: Request, approve, and track deleted services with restoration capability
+- **Recently Restored Badges**: Visual indicators for restored services with auto-expiration
+- **SignalR Auto-Reconnect**: Handles connection drops gracefully
+- **Zero Polling**: All updates pushed via WebSocket (no 5s polling delay)
+- **Modern UI**: Purple gradient theme with smooth animations and hover effects
 ## 📊 Real-Time Dashboard
 
 - **Live Service Monitoring**: Health status changes pushed instantly via SignalR
@@ -373,25 +392,33 @@ dotnet test
 dotnet test tests/Omni.ServiceRegistry.Services.Tests/
 
 # Run with coverage
-dotnet test --collect:"XPlat Code Coverage"
-
-# Run client simulator
-./run-client-simulator.sh
-```
-
-## 🗺️ Roadmap
-
-### ✅ MVP Complete (v1.0)
-- Service registration & approval workflow
-- Heartbeat monitoring with health degradation
-- Service recovery validation
+dotnet test --collect:"XPlat   
+- Service deletion with soft delete and restoration
+- AI Health Insights with Ollama (phi4)
 - REST API with OpenAPI documentation
-- Blazor dashboard (monitoring, approvals, details)
+- Blazor dashboard (monitoring, approvals, details, insights)
 - SignalR real-time updates
 - PostgreSQL storage with migrations
 - Exception handling & CORS
-- Performance optimizations
+- Performance optimizations (95% fewer DB writes)
 - Security headers & rate limiting
+- Recently restored badges with expiration
+- Bulk approval workflow (foundation exists)
+- [ ] Comprehensive test coverage (unit, integration, E2E)
+- [ ] Prometheus metrics export
+- [ ] Kubernetes deployment & HPA
+- [ ] Alerting/notifications (email, webhook)
+- [ ] Service dependency tracking
+- [ ] Advanced LLM models (GPT-4, Claudeon
+- Service recovery validation
+- REST API with OpenAPI documentation
+- Blazor dashboard (monitoring, approvals, details)
+- SignMulti-region support
+- [ ] Advanced analytics & insights trends
+- [ ] Service SLA tracking
+- [ ] Grafana dashboards
+- [ ] AI-powered anomaly detection
+- [ ] Predictive health scoringe limiting
 
 ### 🚧 Priority 2 (Planned)
 - [ ] Authentication/Authorization (JWT, Role-based access)
@@ -423,8 +450,8 @@ dotnet test --collect:"XPlat Code Coverage"
 **Development Guidelines:**
 - Strong typing (NO `var`)
 - One class per file
-- PascalCase (classes, methods), camelCase (variables)
-- Max 120 characters per line
+- PascalCase (clasJanuary 1, 2026  
+**Built with** ❤️ **using .NET 9.0 and Ollama
 - Max 30 lines per method
 - ILogger always last parameter
 

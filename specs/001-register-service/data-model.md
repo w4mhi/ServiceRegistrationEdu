@@ -7,32 +7,32 @@
 ## Entity Relationship Diagram
 
 ```
-┌─────────────────────────┐
-│  RegistrationRequest    │
-├─────────────────────────┤
-│ RegistrationId (PK)     │
-│ ServiceName             │
+┌─────────────────────────┐         ┌─────────────────────────┐
+│  RegistrationRequest    │         │ ServiceHealthInsight    │
+├─────────────────────────┤         ├─────────────────────────┤
+│ RegistrationId (PK)     │         │ InsightId (PK)          │
+│ ServiceName             │         │ ServiceId (FK)          │
 │ ServiceNameNormalized   │◄─── Unique constraint
-│ Description             │
-│ Owner                   │
-│ ContactEmail            │
-│ Endpoints (JSON)        │
-│ HeartbeatTimeout        │
-│ MaxMissedHeartbeats     │
-│ Status (enum)           │
-│ SubmittedDate           │
-│ ApprovedDeniedDate      │
-│ ApprovedDeniedBy        │
-│ Comments                │
-└─────────────────────────┘
-         │ 1:1
-         │ (after approval)
-         ▼
+│ Description             │         │ GeneratedAt             │
+│ Owner                   │         │ TriggerType             │
+│ ContactEmail            │         │ Summary (JSONB)         │
+│ Endpoints (JSON)        │         │ RootCauses (JSONB)      │
+│ HeartbeatTimeout        │         │ CorrelatedServices      │
+│ MaxMissedHeartbeats     │         │ Recommendations (JSONB) │
+│ Status (enum)           │         │ TokensUsed              │
+│ SubmittedDate           │         │ ProcessingTimeMs        │
+│ ApprovedDeniedDate      │         └─────────────────────────┘
+│ ApprovedDeniedBy        │                   │
+│ Comments                │                   │ N
+└─────────────────────────┘                   │
+         │ 1:1                                │
+         │ (after approval)                   │
+         ▼                                    │
 ┌─────────────────────────┐         ┌─────────────────────────┐
 │       Service           │1       N│  ServiceChangeHistory   │
 ├─────────────────────────┤─────────├─────────────────────────┤
-│ ServiceId (PK)          │         │ ChangeId (PK)           │
-│ ServiceName             │         │ ServiceId (FK)          │
+│ ServiceId (PK)          │◄────────│ ServiceId (FK)          │
+│ ServiceName             │         │ ChangeId (PK)           │
 │ ServiceNameNormalized   │◄─── Unique constraint (where not deleted)
 │ Description             │         │ ChangedFields           │
 │ Owner                   │         │ PreviousValue           │
@@ -41,18 +41,18 @@
 │ HeartbeatTimeout        │         │ ChangeTimestamp         │
 │ MaxMissedHeartbeats     │         └─────────────────────────┘
 │ HealthStatus (enum)     │
-│ DeletionStatus (enum)   │
-│ DeletionRequestedDate   │
-│ DeletionRequestedBy     │
-│ DeletionApprovedDate    │
-│ DeletionApprovedBy      │
-│ MissedHeartbeatCounter  │
-│ LastHeartbeatTimestamp  │
-│ LastHeartbeatClientStatus│
-│ RegistrationDate        │
-│ LastUpdatedDate         │
-│ RegisteredBy            │
-│ RowVersion (concurrency)│
+│ DeletionStatus (enum)   │         ┌─────────────────────────┐
+│ DeletionRequestedDate   │         │ AnalysisTriggerLog      │
+│ DeletionRequestedBy     │         ├─────────────────────────┤
+│ DeletionApprovedDate    │         │ TriggerId (PK)          │
+│ DeletionApprovedBy      │         │ ServiceId (FK, nullable)│
+│ MissedHeartbeatCounter  │         │ TriggerType             │
+│ LastHeartbeatTimestamp  │         │ TriggeredBy             │
+│ LastHeartbeatClientStatus│        │ TriggeredAt             │
+│ RegistrationDate        │         │ Status                  │
+│ LastUpdatedDate         │         │ CompletedAt             │
+│ RegisteredBy            │         │ ErrorMessage            │
+│ RowVersion (concurrency)│         └─────────────────────────┘
 └─────────────────────────┘
 ```
 
@@ -210,6 +210,89 @@ ServiceChangeHistory.ServiceId → Service.ServiceId (ON DELETE NO ACTION)
   "NewValue": "{\"Description\": \"New desc\", \"ContactEmail\": \"new@example.com\"}",
   "ChangedBy": "admin@example.com",
   "ChangeTimestamp": "2025-11-09T14:30:00Z"
+}
+```
+
+### 4. ServiceHealthInsight (AI Insights)
+
+**Purpose**: Stores AI-generated health analysis and insights from Ollama (phi4 model).
+
+| Column Name | Type | Constraints | Description |
+|-------------|------|-------------|-------------|
+| InsightId | UNIQUEIDENTIFIER | PRIMARY KEY | Unique identifier for insight record |
+| ServiceId | UNIQUEIDENTIFIER | FOREIGN KEY, NOT NULL | Reference to Service being analyzed |
+| GeneratedAt | DATETIME2 | NOT NULL, DEFAULT GETUTCDATE() | When insight was generated |
+| TriggerType | NVARCHAR(50) | NOT NULL | Enum: Manual, CriticalEvent, ScheduledBatch |
+| TriggeredBy | NVARCHAR(100) | NULL | User who triggered analysis (null for automated) |
+| Summary | NVARCHAR(MAX) | NOT NULL | JSONB: High-level summary of health status |
+| RootCauses | NVARCHAR(MAX) | NOT NULL | JSONB: Array of identified root causes |
+| CorrelatedServices | NVARCHAR(MAX) | NULL | JSONB: Array of related service IDs/names |
+| HistoricalContext | NVARCHAR(MAX) | NULL | JSONB: Historical patterns and trends |
+| Recommendations | NVARCHAR(MAX) | NOT NULL | JSONB: Array of actionable recommendations |
+| ConfidenceScore | DECIMAL(3,2) | NULL | AI confidence (0.00-1.00) |
+| TokensUsed | INT | NULL | Number of LLM tokens consumed |
+| ProcessingTimeMs | INT | NULL | Time taken for analysis in milliseconds |
+
+**Indexes**:
+- `IX_ServiceHealthInsight_ServiceId` (for service-specific queries)
+- `IX_ServiceHealthInsight_GeneratedAt` (for recent insights)
+- `IX_ServiceHealthInsight_TriggerType` (for analysis reporting)
+
+**Foreign Key**:
+```
+ServiceHealthInsight.ServiceId → Service.ServiceId (ON DELETE NO ACTION)
+```
+
+**Example Record**:
+```json
+{
+  "InsightId": "c4d3e2f1-...",
+  "ServiceId": "a1b2c3d4-...",
+  "GeneratedAt": "2026-01-01T10:35:42Z",
+  "TriggerType": "Manual",
+  "TriggeredBy": "admin@example.com",
+  "Summary": "{\"text\": \"Service experiencing intermittent connectivity issues\"}",
+  "RootCauses": "[\"Network timeout to database\", \"Connection pool exhaustion\"]",
+  "CorrelatedServices": "[\"database-service\", \"cache-service\"]",
+  "HistoricalContext": "{\"occurrences\": 3, \"timeframe\": \"7 days\"}",
+  "Recommendations": "[\"Increase connection pool\", \"Add circuit breaker\"]",
+  "ConfidenceScore": 0.85,
+  "TokensUsed": 3842,
+  "ProcessingTimeMs": 12450
+}
+```
+
+### 5. AnalysisTriggerLog (AI Insights)
+
+**Purpose**: Tracks analysis trigger requests and their status for monitoring and debugging.
+
+| Column Name | Type | Constraints | Description |
+|-------------|------|-------------|-------------|
+| TriggerId | UNIQUEIDENTIFIER | PRIMARY KEY | Unique identifier for trigger event |
+| ServiceId | UNIQUEIDENTIFIER | FOREIGN KEY, NULL | Service analyzed (null for global) |
+| TriggerType | NVARCHAR(50) | NOT NULL | Enum: Manual, CriticalEvent, ScheduledBatch |
+| TriggeredBy | NVARCHAR(100) | NULL | User who triggered (null for automated) |
+| TriggeredAt | DATETIME2 | NOT NULL, DEFAULT GETUTCDATE() | When trigger occurred |
+| Status | NVARCHAR(50) | NOT NULL | Enum: Pending, InProgress, Completed, Failed |
+| CompletedAt | DATETIME2 | NULL | When analysis completed |
+| ErrorMessage | NVARCHAR(MAX) | NULL | Error details if failed |
+
+**Indexes**:
+- `IX_AnalysisTriggerLog_TriggeredAt` (for chronological queries)
+- `IX_AnalysisTriggerLog_Status` (for monitoring active analyses)
+- `IX_AnalysisTriggerLog_ServiceId` (for service-specific history)
+
+**Example Record**:
+```json
+{
+  "TriggerId": "e5f4d3c2-...",
+  "ServiceId": null,
+  "TriggerType": "Manual",
+  "TriggeredBy": "admin@example.com",
+  "TriggeredAt": "2026-01-01T10:30:00Z",
+  "Status": "Completed",
+  "CompletedAt": "2026-01-01T10:35:42Z",
+  "ErrorMessage": null
 }
 ```
 

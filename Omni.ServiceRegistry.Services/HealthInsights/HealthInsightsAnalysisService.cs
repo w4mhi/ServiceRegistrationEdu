@@ -290,4 +290,17 @@ public class HealthInsightsAnalysisService : IHealthInsightsAnalysisService
 
         return "GENERAL";
     }
+
+    public async Task<bool> CheckOllamaHealthAsync()
+    {
+        try
+        {
+            return await ollamaService.IsAvailableAsync();
+        }
+        catch (Exception ex)
+        {
+            logger?.LogError(ex, "Ollama health check failed");
+            return false;
+        }
+    }
 }

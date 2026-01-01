@@ -16,15 +16,12 @@ namespace Omni.ServiceRegistry.Dashboard.Services;
 public class HealthInsightsApiClient
 {
     private readonly HttpClient httpClient;
-    private readonly string baseUrl;
     private readonly ILogger<HealthInsightsApiClient> logger;
 
     public HealthInsightsApiClient(IConfiguration configuration, HttpClient httpClient, ILogger<HealthInsightsApiClient> logger)
     {
         this.httpClient = httpClient;
         this.logger = logger;
-        // BaseAddress is already set by Program.cs, use empty string for relative URLs
-        baseUrl = "";
     }
 
     /// <summary>
@@ -175,4 +172,33 @@ public class HealthInsightsApiClient
             return null;
         }
     }
+
+    /// <summary>
+    /// Check if Ollama service is healthy and ready
+    /// </summary>
+    public async Task<bool> CheckOllamaHealthAsync()
+    {
+        try
+        {
+            HttpResponseMessage response = await httpClient.GetAsync("api/v1/insights/health/ollama");
+            if (!response.IsSuccessStatusCode)
+            {
+                return false;
+            }
+
+            OllamaHealthDto? healthDto = await response.Content.ReadFromJsonAsync<OllamaHealthDto>();
+            return healthDto?.IsHealthy ?? false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to check Ollama health");
+            return false;
+        }
+    }
+}
+
+public class OllamaHealthDto
+{
+    public bool IsHealthy { get; set; }
+    public string Message { get; set; } = string.Empty;
 }
