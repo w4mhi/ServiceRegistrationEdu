@@ -46,7 +46,7 @@ This starts:
 - ✅ PostgreSQL database (Docker)
 - ✅ Ollama with phi4 model (Docker)
 - ✅ Service Registry API on http://localhost:5159
-- ✅ Dashboard on http://localhost:5155
+- ✅ Dashboard on http://localhost:5083
 
 **Access:**155
 - **API Docs**: http://localhost:5159/scalar/v1
